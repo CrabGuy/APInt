@@ -1,10 +1,42 @@
+local MODE = "STRICT"
+
+
 local BigInt = {}
 BigInt.__index = BigInt
-local BASE = 2^51 -- MAX 2^53
+local POWER = 52
+local BASE = 2^POWER -- MAX 2^53
 local PRELOADED = {}
+
+assert(POWER % 2 == 0, "POWER must be an even number for multiplication to work properly")
 
 local function is_big_int(x)
     return type(x) == "table" and getmetatable(x) == BigInt
+end
+
+local function slice(array, i, j)
+    return {unpack(array, i, j)}
+end
+
+local function fill(array, desired_length)
+    local new_table = {}
+    for i = 1, desired_length do
+        new_table[i] = ((array[i] == nil) and 0) or array[i]
+    end
+    return new_table
+end
+
+local function join(first, second)
+    local result = {}
+
+    for i, v in pairs(first) do
+        table.insert(result, v)
+    end
+    
+    for i, v in pairs(second) do
+        table.insert(result, v)
+    end
+
+    return result
 end
 
 local function typecheck(f)
@@ -12,8 +44,12 @@ local function typecheck(f)
         local arguments = {...}
         for i, v in pairs(arguments) do
             if not is_big_int(v) then
-                print("Argument for operation was not a BIGNUM, converted")
-                arguments[i] = BigInt.new(v)
+                if MODE == "STRICT" then
+                    error("Argument for operation was not BIGNUM")
+                else
+                    print("Argument for operation was not a BIGNUM, converted")
+                    arguments[i] = BigInt.new(v)
+                end
             end
         end
         return f(unpack(arguments))
@@ -170,6 +206,10 @@ local function __sub(a, b)
 end
 
 local function __eq(a, b)
+    if type(a) ~= type(b) then
+        return false
+    end
+
     if (__sign(a) ~= __sign(b)) or (__amount_digits(a) ~= __amount_digits(b)) then
         return false
     end
@@ -211,14 +251,15 @@ end
 
 
 local function __shr(a, b)
-    b = ((b == nil) and 1) or b
+    assert(b % BigInt.new(1) == 0, "b must be a whole number")
+    b = ((b == nil) and BigInt.new(1)) or b
 
-    if b ~= 1 then
+    if b ~= BigInt.new(1) then
         local result = a
         local i = BigInt.new(1)
         while i <= b do
-            result = __shr(result, 1)
-            i = i + 1
+            result = __shr(result, BigInt.new(1))
+            i = i + BigInt.new(1)
         end
         return result
     end
@@ -239,6 +280,41 @@ local function __shr(a, b)
     return BigInt.new(__remove_trailing_zeros(digits))
 end
 
+local function __shl(a, b)
+    assert(b % 1 == 0, "b must be a whole number")
+    b = ((b == nil) and BigInt.new(1)) or b
+
+    if b ~= BigInt.new(1) then
+        local result = a
+        local i = BigInt.new(1)
+        while i <= b do
+            result = __shl(result, BigInt.new(1))
+            i = i + BigInt.new(1)
+        end
+        return result
+    end
+
+    local digits = {}
+    local carry = 0
+    for i = 1, #a.digits do
+        local old_carry = carry
+        digits[i] = a.digits[i]
+        carry = 0
+        if digits[i] > (BASE/2) then
+            digits[i] = digits[i] % (BASE/2)
+            carry = 1
+        end
+        digits[i] = digits[i] * 2 + old_carry
+    end
+
+    if carry ~= 0 then
+        table.insert(digits, carry)
+    end
+
+    digits[1] = digits[1] * __sign(a)
+    return BigInt.new(digits)
+end
+
 local function __div(a, b)
     assert(b ~= BigInt.new(0), "Division by 0")
     local same_sign = __sign(a) == __sign(b)
@@ -246,7 +322,7 @@ local function __div(a, b)
     local right = __abs(a)
 
     while __abs(right - left) > BigInt.new(1) do
-        local middle = __shr(right - left, 1) + left
+        local middle = __shr(right - left, BigInt.new(1)) + left
         local result = middle * __abs(b) - __abs(a)
         --print(string.format("left: {%s}, right: {%s}, middle: {%s}, result: {%s}", format(left), format(right), format(middle), format(result)))
 
@@ -274,6 +350,71 @@ local function __mod(a, b)
 end
 
 local function __mul(a, b)
+    -- fix the sign
+    if a == BigInt.new(0) or b == BigInt.new(0) then
+        return BigInt.new(0)
+    end
+
+    local bigger = __max(a, b)
+    local smaller = __min(a, b)
+
+    if __amount_digits(bigger) == 1 then
+        if bigger.digits[1] < math.sqrt(BASE) then
+            return BigInt.new(bigger.digits[1] * smaller.digits[1])
+        end
+        local m = POWER / 2
+        local B = 2
+        
+        local a0 = a % BigInt.new(B^m)
+        local a1 = __shl(a, m)
+    
+        local b0 = b % BigInt.new(B^m)
+        local b1 = __shl(b, m)
+
+        local z0 = a0 * b0
+        local z2 = a1 * b1
+        local z3 = (a0 + a1)(b0 + b1)
+        local z1 = z3 - z2 - z0
+
+        local digits = {z0 + z1 * B^m, z2}
+
+        return BigInt.new(digits)
+    end
+
+    -- does not work, factorial(60) gives the wrong result. It has to do with the lower digits of the number
+
+    local half = math.ceil(__amount_digits(bigger) / 2)
+    
+    local a0 = slice(bigger.digits, 1, half)
+    local a1 = slice(bigger.digits, half + 1, __amount_digits(bigger))
+    
+    local b0 = slice(smaller.digits, 1, half)
+    local b1 = slice(smaller.digits, half + 1, __amount_digits(smaller))
+    if #b1 == 0 then
+        b1 = {0}
+    end
+
+    a0 = BigInt.new(a0)
+    a1 = BigInt.new(a1)
+
+    b0 = BigInt.new(b0)
+    b1 = BigInt.new(b1)
+
+    local z0 = a0 * b0
+    local z2 = a1 * b1
+    local z3 = (a0 + a1)(b0 + b1)
+    local z1 = z3 - z2 - z0
+
+    local z0_digits = fill(z0.digits, half)
+    local z1_digits = fill(z1.digits, half * 2)
+    local z2_digits = z2.digits
+
+    local digits = join(z0_digits, join(z1_digits, z2_digits))
+
+    return BigInt.new(digits)
+end
+
+local function __old_mul(a, b)
     local result = __abs(a)
     local i = BigInt.new(1)
     while i < b do
@@ -322,7 +463,7 @@ BigInt.__add = typecheck(__add)
 BigInt.__sub = typecheck(__sub)
 BigInt.__mod = typecheck(__mod)
 BigInt.__div = typecheck(__div)
-BigInt.__mul = typecheck(__mul)
+BigInt.__mul = typecheck(__old_mul)    -- CAMBIA QUANDO TESTI KARATSUBA
 BigInt.__tostring = typecheck(__tostring)
 BigInt.__unm = typecheck(__unm)
 BigInt.__lt = typecheck(__lt)
@@ -363,6 +504,16 @@ local function fibonacci(x)
     end
     return a
 end
+
+local function factorial(x)
+    if x <= BigInt.new(1) then
+        return BigInt.new(1)
+    end
+    return factorial(x - BigInt.new(1)) * x
+end
+
+test_print(factorial(BigInt.new(60)))
+
 
 -- print(fibonacci(200))
 -- 280571172992510140037611932413038677189525
