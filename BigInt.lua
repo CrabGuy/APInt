@@ -69,7 +69,7 @@ function BigInt.new(x)
     
     if type(x) == "number" then
         assert(x % 1 == 0, "Argument of x must be a whole number")
-        assert(-BASE < x and x < BASE, "Argument must be between " .. tostring(-BASE) .. " and " .. tostring(BASE))
+        assert((-BASE < x) and (x < BASE), "Argument must be between " .. tostring(-BASE) .. " and " .. tostring(BASE))
     end
 
     local digits = x --table
@@ -108,7 +108,7 @@ local function format(x)
 end
 
 local function test_print(x)
-    print(format(x))
+    print("{".. format(x).. "}")
 end
 
 
@@ -136,14 +136,18 @@ local function __add(a, b)
 
     local i = 1
     while (i <= __amount_digits(a)) or (i <= __amount_digits(b)) do
-        local sum = (a.digits[i] or 0) + (b.digits[i] or 0) + carry
-        carry = 0
-        table.insert(digits, sum % BASE)
-        if sum > BASE then
+        local a0 = a.digits[i] or 0
+        local b0 = b.digits[i] or 0
+        if BASE - b0 <= a0 + carry then
+            table.insert(digits, (b0 - BASE) + a0 + carry)
             carry = 1
+        else
+            table.insert(digits, a0 + b0 + carry)
+            carry = 0
         end
         i = i + 1
     end
+
     if carry ~= 0 then
         table.insert(digits, carry)
     end
@@ -359,40 +363,49 @@ local function __mul(a, b)
     local smaller = __min(a, b)
 
     if __amount_digits(bigger) == 1 then
-        if bigger.digits[1] < math.sqrt(BASE) then
+        -- questa parte dovrebbe funzionare
+        if bigger.digits[1] <= math.sqrt(BASE) then
+            if bigger.digits[1] == smaller.digits[1] and bigger.digits[1] == math.sqrt(BASE) then
+                return BigInt.new({0, 1})
+            end
             return BigInt.new(bigger.digits[1] * smaller.digits[1])
         end
+        a = a.digits[1]
+        b = b.digits[1]
+
         local m = POWER / 2
         local B = 2
-        
-        local a0 = a % BigInt.new(B^m)
-        local a1 = __shl(a, m)
-    
-        local b0 = b % BigInt.new(B^m)
-        local b1 = __shl(b, m)
+
+        local Bm = B^m
+
+        local a0 = a % Bm
+        local a1 = math.floor(a / Bm)
+
+        local b0 = b % Bm
+        local b1 = math.floor(b / Bm)
 
         local z0 = a0 * b0
         local z2 = a1 * b1
-        local z3 = (a0 + a1)(b0 + b1)
-        local z1 = z3 - z2 - z0
-
-        local digits = {z0 + z1 * B^m, z2}
-
-        return BigInt.new(digits)
+        local z3 = BigInt.new(a0 + a1) * BigInt.new(b0 + b1)
+        local z1 = z3 - BigInt.new(z2) - BigInt.new(z0)
+        local result = (BigInt.new(z0) + (z1 * BigInt.new(Bm))) + BigInt.new({0, z2})
+        return result
     end
-
-    -- does not work, factorial(60) gives the wrong result. It has to do with the lower digits of the number
-
     local half = math.ceil(__amount_digits(bigger) / 2)
-    
+    print(half)
+
     local a0 = slice(bigger.digits, 1, half)
     local a1 = slice(bigger.digits, half + 1, __amount_digits(bigger))
-    
+
     local b0 = slice(smaller.digits, 1, half)
     local b1 = slice(smaller.digits, half + 1, __amount_digits(smaller))
     if #b1 == 0 then
         b1 = {0}
     end
+
+    -- questa parte non funziona, ci deve essere qualche errore nella somma degli elementi, non so neanche perchè c'è uno 0 alla fine
+
+    print(#a0, #a1, #b0, #b1)
 
     a0 = BigInt.new(a0)
     a1 = BigInt.new(a1)
@@ -402,16 +415,14 @@ local function __mul(a, b)
 
     local z0 = a0 * b0
     local z2 = a1 * b1
-    local z3 = (a0 + a1)(b0 + b1)
+    local z3 = (a0 + a1) * (b0 + b1)
     local z1 = z3 - z2 - z0
 
-    local z0_digits = fill(z0.digits, half)
-    local z1_digits = fill(z1.digits, half * 2)
-    local z2_digits = z2.digits
+    local z0_digits = z0.digits
+    local z1_digits = join(fill({}, half), z1.digits)
+    local z2_digits = join(fill({}, half * 2), z2.digits)
 
-    local digits = join(z0_digits, join(z1_digits, z2_digits))
-
-    return BigInt.new(digits)
+    return BigInt.new(z0_digits) + BigInt.new(z1_digits) + BigInt.new(z2_digits)
 end
 
 local function __old_mul(a, b)
@@ -463,7 +474,7 @@ BigInt.__add = typecheck(__add)
 BigInt.__sub = typecheck(__sub)
 BigInt.__mod = typecheck(__mod)
 BigInt.__div = typecheck(__div)
-BigInt.__mul = typecheck(__old_mul)    -- CAMBIA QUANDO TESTI KARATSUBA
+BigInt.__mul = typecheck(__mul)    -- CAMBIA QUANDO TESTI KARATSUBA
 BigInt.__tostring = typecheck(__tostring)
 BigInt.__unm = typecheck(__unm)
 BigInt.__lt = typecheck(__lt)
@@ -484,16 +495,6 @@ local function test_division(a, b)
     assert(custom == library, string.format("\na: %d, b: %d\ndiv(a, b) = %s, a/b = %s", a, b, tostring(custom), tostring(library)))
 end
 
-
---[[ for MAX = 1, BASE - 2 do
-    local a = math.floor(math.random() * MAX) + 1
-    local b = math.floor(math.random() * MAX) + 1
-    print(a, b)
-    test_division(a, b)
-end ]]
-
---print(BigInt.new(BASE - 2) * BigInt.new(100))
-
 local function fibonacci(x)
     local a = BigInt.new(0)
     local b = BigInt.new(1)
@@ -512,8 +513,7 @@ local function factorial(x)
     return factorial(x - BigInt.new(1)) * x
 end
 
-test_print(factorial(BigInt.new(60)))
+local number = BigInt.new(BASE / 2 + 1)
 
-
--- print(fibonacci(200))
--- 280571172992510140037611932413038677189525
+--test_print(factorial(BigInt.new(60)))
+test_print(number * number * number * number)
