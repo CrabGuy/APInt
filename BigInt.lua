@@ -7,6 +7,16 @@ local POWER = 52
 local BASE = 2^POWER -- MAX 2^53
 local PRELOADED = {}
 
+local last_time = os.clock()
+
+local function time_since_last_call(label)
+    local current_time = os.clock()
+    local elapsed = current_time - last_time
+    last_time = current_time
+    print(string.format("[TIMER] %s: %.6f seconds", label or "Elapsed time", elapsed))
+    return elapsed
+end
+
 assert(POWER % 2 == 0, "POWER must be an even number for multiplication to work properly")
 
 local function is_big_int(x)
@@ -19,7 +29,7 @@ end
 
 local function fill(array, desired_length)
     local new_table = {}
-    for i = 1, desired_length do
+    for i = 1, math.max(desired_length, #array) do
         new_table[i] = ((array[i] == nil) and 0) or array[i]
     end
     return new_table
@@ -69,7 +79,7 @@ function BigInt.new(x)
     
     if type(x) == "number" then
         assert(x % 1 == 0, "Argument of x must be a whole number")
-        assert((-BASE < x) and (x < BASE), "Argument must be between " .. tostring(-BASE) .. " and " .. tostring(BASE))
+        assert((-BASE < x) and (x < BASE), "Argument must be between " .. string.format("%.f", -BASE) .. " and " .. string.format("%.f", BASE))
     end
 
     local digits = x --table
@@ -77,7 +87,7 @@ function BigInt.new(x)
         digits = {x}
     end
     for i, v in pairs(digits) do
-        assert(-BASE < v and v < BASE, "Every elements of the digits table needs to be between " .. tostring(-BASE) .. " and " .. tostring(BASE))
+        assert(-BASE < v and v < BASE, "Every elements of the digits table needs to be between " .. string.format("%.f", -BASE) .. " and " .. string.format("%.f", BASE))
     end
     
     local self = {}
@@ -354,7 +364,10 @@ local function __mod(a, b)
 end
 
 local function __mul(a, b)
-    -- fix the sign
+    if __sign(a) ~= __sign(b) then
+        return -(__mul(__abs(a), __abs(b)))
+    end
+
     if a == BigInt.new(0) or b == BigInt.new(0) then
         return BigInt.new(0)
     end
@@ -362,7 +375,7 @@ local function __mul(a, b)
     local bigger = __max(a, b)
     local smaller = __min(a, b)
 
-    if __amount_digits(bigger) == 1 then
+    if __amount_digits(bigger) <= 1 then
         -- questa parte dovrebbe funzionare
         if bigger.digits[1] <= math.sqrt(BASE) then
             if bigger.digits[1] == smaller.digits[1] and bigger.digits[1] == math.sqrt(BASE) then
@@ -392,37 +405,28 @@ local function __mul(a, b)
         return result
     end
     local half = math.ceil(__amount_digits(bigger) / 2)
-    print(half)
+    local a_digits = bigger.digits
+    local b_digits = smaller.digits
 
-    local a0 = slice(bigger.digits, 1, half)
-    local a1 = slice(bigger.digits, half + 1, __amount_digits(bigger))
-
-    local b0 = slice(smaller.digits, 1, half)
-    local b1 = slice(smaller.digits, half + 1, __amount_digits(smaller))
-    if #b1 == 0 then
-        b1 = {0}
-    end
-
-    -- questa parte non funziona, ci deve essere qualche errore nella somma degli elementi, non so neanche perchè c'è uno 0 alla fine
-
-    print(#a0, #a1, #b0, #b1)
-
-    a0 = BigInt.new(a0)
-    a1 = BigInt.new(a1)
-
-    b0 = BigInt.new(b0)
-    b1 = BigInt.new(b1)
+    local a0 = BigInt.new(slice(a_digits, 1, half))
+    local a1 = BigInt.new(slice(a_digits, half + 1, #a_digits))
+    local b0 = BigInt.new(slice(b_digits, 1, math.min(half, #b_digits)))
+    local b1 = BigInt.new(fill(slice(b_digits, math.min(half, #b_digits) + 1, #b_digits), 1)) -- if b1 is empty => {0}
 
     local z0 = a0 * b0
     local z2 = a1 * b1
     local z3 = (a0 + a1) * (b0 + b1)
-    local z1 = z3 - z2 - z0
-
+    local z1 = z3 - z0 - z2
+    
     local z0_digits = z0.digits
     local z1_digits = join(fill({}, half), z1.digits)
     local z2_digits = join(fill({}, half * 2), z2.digits)
 
-    return BigInt.new(z0_digits) + BigInt.new(z1_digits) + BigInt.new(z2_digits)
+    z0 = BigInt.new(z0_digits)
+    z1 = BigInt.new(z1_digits)
+    z2 = BigInt.new(z2_digits)
+
+    return BigInt.new(__remove_trailing_zeros((z0 + z1 + z2).digits))
 end
 
 local function __old_mul(a, b)
@@ -515,5 +519,7 @@ end
 
 local number = BigInt.new(BASE / 2 + 1)
 
---test_print(factorial(BigInt.new(60)))
-test_print(number * number * number * number)
+time_since_last_call("Start")
+test_print(factorial(BigInt.new(400)))
+time_since_last_call("Finish")
+--test_print(number * number * number * number * number)
