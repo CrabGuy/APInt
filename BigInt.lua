@@ -1,27 +1,24 @@
 local MODE = "STRICT"
 
+-- use enums to make everything more clear when refactoring
+
+--[[ local enum = function(keys)
+    local Enum = {}
+    for _, value in ipairs(keys) do
+        Enum[value] = {} 
+    end
+    return Enum
+end ]]
 
 local BigInt = {}
 BigInt.__index = BigInt
 local POWER = 52
 local BASE = 2^POWER -- MAX 2^53
+BigInt.BASE = BASE
 local PRELOADED = {}
 
-local last_time = os.clock()
-
-local function time_since_last_call(label)
-    local current_time = os.clock()
-    local elapsed = current_time - last_time
-    last_time = current_time
-    print(string.format("[TIMER] %s: %.6f seconds", label or "Elapsed time", elapsed))
-    return elapsed
-end
 
 assert(POWER % 2 == 0, "POWER must be an even number for multiplication to work properly")
-
-local function is_big_int(x)
-    return type(x) == "table" and getmetatable(x) == BigInt
-end
 
 local function slice(array, i, j)
     return {unpack(array, i, j)}
@@ -49,11 +46,36 @@ local function join(first, second)
     return result
 end
 
+local function safe_add(a, b)
+    if BASE - a <= b then
+        return (- BASE + a) + b, 1
+    end
+    return a + b, 0
+end
+
+local function format(x)
+    if not BigInt.__is_big_int(x) then
+        return string.format("%.f", x)
+    end
+
+    local digits = {}
+    for i, v in pairs(x.digits) do
+        table.insert(digits, string.format("%.f", v))
+    end
+
+    local text = table.concat(digits, ", ")
+    return x.sign == 1 and text or ("-" .. text)
+end
+
+local function test_print(x)
+    print("{".. format(x).. "}")
+end
+
 local function typecheck(f)
     return function(...)
         local arguments = {...}
         for i, v in pairs(arguments) do
-            if not is_big_int(v) then
+            if not BigInt.__is_big_int(v) then
                 if MODE == "STRICT" then
                     error("Argument for operation was not BIGNUM")
                 else
@@ -66,12 +88,16 @@ local function typecheck(f)
     end
 end
 
+function BigInt.__is_big_int(x)
+    return type(x) == "table" and getmetatable(x) == BigInt
+end
+
 function BigInt.new(x)
     if PRELOADED[x] then
         return PRELOADED[x]
     end
 
-    if is_big_int(x) then
+    if BigInt.__is_big_int(x) then
         return x
     end
 
@@ -89,7 +115,7 @@ function BigInt.new(x)
     for i, v in pairs(digits) do
         assert(-BASE < v and v < BASE, "Every elements of the digits table needs to be between " .. string.format("%.f", -BASE) .. " and " .. string.format("%.f", BASE))
     end
-    
+
     local self = {}
     self.digits = digits
     self.sign = ((self.digits[1] < 0) and -1) or 1
@@ -101,24 +127,6 @@ end
 -- Preloading some numbers like python does
 for i = -5, 256 do
     PRELOADED[i] = BigInt.new(i)
-end
-
-local function format(x)
-    if not is_big_int(x) then
-        return string.format("%.f", x)
-    end
-
-    local digits = {}
-    for i, v in pairs(x.digits) do
-        table.insert(digits, string.format("%.f", v))
-    end
-
-    local text = table.concat(digits, ", ")
-    return x.sign == 1 and text or ("-" .. text)
-end
-
-local function test_print(x)
-    print("{".. format(x).. "}")
 end
 
 
@@ -176,9 +184,9 @@ local function __min(a, b)
 end
 
 local function __remove_trailing_zeros(digits)
-    for j = #digits, 1, -1 do
-        if digits[j] == 0 then
-            table.remove(digits, j)
+    for i = #digits, 1, -1 do
+        if digits[i] == 0 then
+            table.remove(digits, i)
         else
             break
         end
@@ -263,9 +271,7 @@ local function __lt(a, b)
     return true
 end
 
-
 local function __shr(a, b)
-    assert(b % BigInt.new(1) == 0, "b must be a whole number")
     b = ((b == nil) and BigInt.new(1)) or b
 
     if b ~= BigInt.new(1) then
@@ -275,7 +281,7 @@ local function __shr(a, b)
             result = __shr(result, BigInt.new(1))
             i = i + BigInt.new(1)
         end
-        return result
+        return result * BigInt.new(__sign(a)) * BigInt.new(__sign(b))
     end
 
     local digits = {}
@@ -291,7 +297,7 @@ local function __shr(a, b)
     end
 
     digits[1] = digits[1] * __sign(a)
-    return BigInt.new(__remove_trailing_zeros(digits))
+    return BigInt.new(__remove_trailing_zeros(digits)) * BigInt.new(__sign(a)) * BigInt.new(__sign(b))
 end
 
 local function __shl(a, b)
@@ -329,33 +335,54 @@ local function __shl(a, b)
     return BigInt.new(digits)
 end
 
-local function __div(a, b)
-    assert(b ~= BigInt.new(0), "Division by 0")
-    local same_sign = __sign(a) == __sign(b)
+local function bisection_division(a, b)
     local left = BigInt.new(0)
     local right = __abs(a)
 
     while __abs(right - left) > BigInt.new(1) do
         local middle = __shr(right - left, BigInt.new(1)) + left
-        local result = middle * __abs(b) - __abs(a)
-        --print(string.format("left: {%s}, right: {%s}, middle: {%s}, result: {%s}", format(left), format(right), format(middle), format(result)))
+        local result = (middle * __abs(b)) - __abs(a)
 
         if result <= BigInt.new(0) then
             left = middle
         end
+        
         if result >= BigInt.new(0) then
             right = middle
         end
+        
         if result == BigInt.new(0) then
             break
         end
     end
 
     if right * __abs(b) == __abs(a) then
-        return (same_sign and right or -right), 0
+        return right, 0
     end
 
-    return (same_sign and left or -left), __abs(a) - left * __abs(b)
+    return left, __abs(a) - left * __abs(b)
+end
+
+local function long_division(a, b)
+    local Q = BigInt.new(0)
+    local R = a
+
+    while R >= b do
+        local quotient_digit = bisection_division(R, b)
+        R = R - quotient_digit * b
+        Q = Q + quotient_digit
+    end
+
+    return Q, R
+end
+
+
+local function __div(a, b)
+    assert(b ~= BigInt.new(0), "Division by 0")
+    local same_sign = __sign(a) == __sign(b)
+    local q, r = long_division(a, b)
+
+    return ((same_sign and q) or -q), r
 end
 
 local function __mod(a, b)
@@ -363,20 +390,11 @@ local function __mod(a, b)
     return result
 end
 
-local function __mul(a, b)
-    if __sign(a) ~= __sign(b) then
-        return -(__mul(__abs(a), __abs(b)))
-    end
-
-    if a == BigInt.new(0) or b == BigInt.new(0) then
-        return BigInt.new(0)
-    end
-
+local function karatsuba_mul(a, b)
     local bigger = __max(a, b)
     local smaller = __min(a, b)
 
     if __amount_digits(bigger) <= 1 then
-        -- questa parte dovrebbe funzionare
         if bigger.digits[1] <= math.sqrt(BASE) then
             if bigger.digits[1] == smaller.digits[1] and bigger.digits[1] == math.sqrt(BASE) then
                 return BigInt.new({0, 1})
@@ -402,7 +420,7 @@ local function __mul(a, b)
         local z3 = BigInt.new(a0 + a1) * BigInt.new(b0 + b1)
         local z1 = z3 - BigInt.new(z2) - BigInt.new(z0)
         local result = (BigInt.new(z0) + (z1 * BigInt.new(Bm))) + BigInt.new({0, z2})
-        return result
+        return BigInt.new(__remove_trailing_zeros(result.digits))
     end
     local half = math.ceil(__amount_digits(bigger) / 2)
     local a_digits = bigger.digits
@@ -429,16 +447,86 @@ local function __mul(a, b)
     return BigInt.new(__remove_trailing_zeros((z0 + z1 + z2).digits))
 end
 
-local function __old_mul(a, b)
-    local result = __abs(a)
-    local i = BigInt.new(1)
-    while i < b do
-        result = result + __abs(a)
-        --test_print(result)
-        i = i + BigInt.new(1)
+-- cretino impara come si fanno le moltiplicazioni da scuola elementare che l'algoritmo sta sulla luna
+local function textbook_mul(a, b)
+    local SPLIT_BASE = math.sqrt(BASE)
+    local a_digits = a.digits
+    local b_digits = b.digits
+
+    local result_digits = {}
+    local max_pos = #a_digits + #b_digits - 1
+    for i = 1, max_pos + 1 do
+        result_digits[i] = 0
     end
 
-    return __sign(a) == __sign(b) and result or -result
+
+    for i = 1, #a_digits do
+        local carry = 0
+        for j = 1, #b_digits do
+            local pos = i + j - 1
+            local a0 = a_digits[i] % SPLIT_BASE
+            local a1 = math.floor(a_digits[i] / SPLIT_BASE)
+
+            local b0 = b_digits[i] % SPLIT_BASE
+            local b1 = math.floor(b_digits[i] / SPLIT_BASE)
+
+            local c0 = a0 * b0
+            local c2_carry = 0
+            local c1, remainder = safe_add(a0 * b1, a1 * b0)
+            if remainder then
+                c2_carry = 1
+            end
+
+            if c1 >= SPLIT_BASE then
+                c2_carry = c2_carry + math.floor(c1 / SPLIT_BASE)
+                c1 = c1 % SPLIT_BASE
+            end
+
+            local c2 = a1 * b1 + c2_carry
+            carry = c2
+
+            local current = c0 + c1 * SPLIT_BASE
+            result_digits[pos] = current
+        end
+
+        -- this is 99% not correct
+        local pos = i + #b_digits
+        while carry > 0 do
+            local sum = result_digits[pos] + carry
+            if BASE - carry <= result_digits[pos] then
+                sum = - BASE + result_digits[pos] + carry
+            end
+            result_digits[pos] = sum
+            carry = math.floor(sum / BASE)
+            pos = pos + 1
+        end
+    end
+    
+    __remove_trailing_zeros(result_digits)
+
+    if #result_digits == 0 then
+        result_digits = {0}
+    end
+
+    return BigInt.new(result_digits)
+end
+
+local KARATSUBA_DIGITS_THRESHOLD = 1
+
+local function __mul(a, b)
+    if __sign(a) ~= __sign(b) then
+        return -(__mul(__abs(a), __abs(b)))
+    end
+
+    if a == BigInt.new(0) or b == BigInt.new(0) then
+        return BigInt.new(0)
+    end
+
+    if (__amount_digits(a) > KARATSUBA_DIGITS_THRESHOLD) or (__amount_digits(b) > KARATSUBA_DIGITS_THRESHOLD) then
+        return karatsuba_mul(a, b)
+    end
+
+    return textbook_mul(a, b) -- da cambiare in textbook_mul
 end
 
 local function __tostring(x)
@@ -448,9 +536,9 @@ local function __tostring(x)
     local sign = __sign(x)
 
     local text = ""
-    local remainder = 0
+    local remainder = BigInt.new(0)
     while x ~= BigInt.new(0) do
-        x, remainder = __div(x, BigInt.new(10))
+        x, remainder = __div(x, BigInt.new(10^math.floor(math.log10(BASE))))
         text = tostring(remainder) .. text
     end
 
@@ -471,55 +559,16 @@ local function __le(a, b)
     return __lt(a, b) or __eq(a, b)
 end
 
-
-
-
 BigInt.__add = typecheck(__add)
 BigInt.__sub = typecheck(__sub)
 BigInt.__mod = typecheck(__mod)
 BigInt.__div = typecheck(__div)
-BigInt.__mul = typecheck(__mul)    -- CAMBIA QUANDO TESTI KARATSUBA
+BigInt.__mul = typecheck(__mul)
 BigInt.__tostring = typecheck(__tostring)
 BigInt.__unm = typecheck(__unm)
 BigInt.__lt = typecheck(__lt)
 BigInt.__eq = typecheck(__eq)
 BigInt.__le = typecheck(__le)
 
-local function test_operation(name, custom, default)
-    return function(a, b)
-        local own = custom(BigInt.new(a), BigInt.new(b))
-        local library = default(a, b)
-        assert(custom == library, string.format("\na: %d, b: %d\n%s(a, b) = {%s}, correct_%s(a, b) = %s", a, b, name, format(own), name, format(library)))
-    end
-end
 
-local function test_division(a, b)
-    local custom = __div(BigInt.new(a), BigInt.new(b))
-    local library = BigInt.new(math.floor(a / b))
-    assert(custom == library, string.format("\na: %d, b: %d\ndiv(a, b) = %s, a/b = %s", a, b, tostring(custom), tostring(library)))
-end
-
-local function fibonacci(x)
-    local a = BigInt.new(0)
-    local b = BigInt.new(1)
-    for i = 1, x do
-        local temp = b
-        b = b + a
-        a = temp
-    end
-    return a
-end
-
-local function factorial(x)
-    if x <= BigInt.new(1) then
-        return BigInt.new(1)
-    end
-    return factorial(x - BigInt.new(1)) * x
-end
-
-local number = BigInt.new(BASE / 2 + 1)
-
-time_since_last_call("Start")
-test_print(factorial(BigInt.new(400)))
-time_since_last_call("Finish")
---test_print(number * number * number * number * number)
+return BigInt
