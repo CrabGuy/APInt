@@ -10,22 +10,19 @@ local function time_since_last_call(label)
     return elapsed
 end
 
-local function format(x)
-    if not BigInt.__is_big_int(x) then
-        return string.format("%.f", x)
+local format = BigInt.format
+local test_print = BigInt.test_print
+
+local function factorial_big_int(x)
+    x = BigInt.new(x)
+    local result = BigInt.new(1)
+    while true do
+        if x <= BigInt.new(1) then
+            return result
+        end
+        result = result * x
+        x = x - BigInt.new(1)
     end
-
-    local digits = {}
-    for i, v in pairs(x.digits) do
-        table.insert(digits, string.format("%.f", v))
-    end
-
-    local text = table.concat(digits, ", ")
-    return x.sign == 1 and text or ("-" .. text)
-end
-
-local function test_print(x)
-    print("{".. format(x).. "}")
 end
 
 local function test_operation(name, custom, default)
@@ -47,22 +44,43 @@ local function fibonacci(x)
     return a
 end
 
-local function factorial(x)
-    if x <= BigInt.new(1) then
-        return BigInt.new(1)
-    end
-    return factorial(x - BigInt.new(1)) * x
-end
-
 local test_division = test_operation("div", function(a, b) return a / b end, function(a, b) return math.floor(a / b) end)
 local test_multiplication = test_operation("mul", function(a, b) return a * b end, function(a, b) return a * b end)
 
+local function random_test(amount, constructor)
+    for i = 1, amount do
+        test_division(math.random(1, BigInt.BASE - 1), math.random(1, BigInt.BASE - 1))
+        --local result = constructor() / constructor(math.random(1, BigInt.BASE - 1))
+    end
+end
 
---[[ time_since_last_call("Start")
-test_print(factorial(BigInt.new(400)))
-time_since_last_call("Finish") ]]
+--[[ local x = 1000
 
---test_print(BigInt.new((2 ^ 52) - 2) * BigInt.new((2 ^ 52) - 2))
+time_since_last_call("Start BigInt")
+random_test(x, BigInt.new)
+time_since_last_call("Finish BigInt") ]]
+
+
+local a = factorial_big_int(BigInt.new(4))
+local b = BigInt.new(BigInt.BASE - 2) * BigInt.new(BigInt.BASE - 2)
+
+test_print(a / b)
+
+--[[ time_since_last_call("Start BigNum")
+random_test(x, BigNum.new)
+time_since_last_call("Finish BigNum") ]]
+
+--[[ time_since_last_call("Start BigInt")
+random_test(AMOUNT, BigInt.new)
+time_since_last_call("Finish BigInt")
+
+time_since_last_call("Start BigNum")
+random_test(AMOUNT, BigNum.new)
+time_since_last_call("Finish BigNum") ]]
+
+
+
+--test_print(factorial(BigInt.new(120)))
 
 --[[ local a = factorial(BigInt.new(50))
 local b = BigInt.new(5)
@@ -74,12 +92,12 @@ print("q", format(q), "r", format(r))
 print(a)
  ]]
 
-time_since_last_call("Tests")
+--[[ time_since_last_call("Tests")
 for i = 1, 1000 do
     local x = math.random(1, 30)
     print(string.format("factorial(%d)", x))
     factorial(BigInt.new(x))
 end
-time_since_last_call("Tests")
+time_since_last_call("Tests") ]]
 
 -- [4, 4503599627370492]

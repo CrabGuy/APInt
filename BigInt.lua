@@ -21,42 +21,35 @@ local PRELOADED = {}
 assert(POWER % 2 == 0, "POWER must be an even number for multiplication to work properly")
 
 local function slice(array, i, j)
-    return {unpack(array, i, j)}
-end
-
-local function fill(array, desired_length)
-    local new_table = {}
-    for i = 1, math.max(desired_length, #array) do
-        new_table[i] = ((array[i] == nil) and 0) or array[i]
-    end
-    return new_table
-end
-
-local function join(first, second)
     local result = {}
-
-    for i, v in pairs(first) do
-        table.insert(result, v)
+    for i = i, j do
+        table.insert(result, array[i])
     end
-    
-    for i, v in pairs(second) do
+    return result
+end
+
+local function pad(array, amount)
+    local result = {}
+    for i = 1, amount do
+        table.insert(result, 0)
+    end
+
+    for i, v in pairs(array) do
         table.insert(result, v)
     end
 
     return result
 end
 
-local function safe_add(a, b)
-    if BASE - a <= b then
-        return (- BASE + a) + b, 1
-    end
-    return a + b, 0
-end
+function BigInt.format(x)
+    local is_number = type(x) ~= "number"
+    local is_big_int = type(x) ~= "table" and BigInt.__is_big_int(x)
 
-local function format(x)
-    if not BigInt.__is_big_int(x) then
+    if is_number then
         return string.format("%.f", x)
     end
+
+    assert(is_big_int, "Format argument is not a number")
 
     local digits = {}
     for i, v in pairs(x.digits) do
@@ -67,8 +60,8 @@ local function format(x)
     return x.sign == 1 and text or ("-" .. text)
 end
 
-local function test_print(x)
-    print("{".. format(x).. "}")
+function BigInt.test_print(x)
+    print("{".. BigInt.format(x).. "}")
 end
 
 local function typecheck(f)
@@ -77,9 +70,9 @@ local function typecheck(f)
         for i, v in pairs(arguments) do
             if not BigInt.__is_big_int(v) then
                 if MODE == "STRICT" then
-                    error("Argument for operation was not BIGNUM")
+                    error("Argument for operation was not BIGINT")
                 else
-                    print("Argument for operation was not a BIGNUM, converted")
+                    print("Argument for operation was not a BIGINT, converted")
                     arguments[i] = BigInt.new(v)
                 end
             end
@@ -346,11 +339,11 @@ local function bisection_division(a, b)
         if result <= BigInt.new(0) then
             left = middle
         end
-        
+
         if result >= BigInt.new(0) then
             right = middle
         end
-        
+
         if result == BigInt.new(0) then
             break
         end
@@ -363,24 +356,10 @@ local function bisection_division(a, b)
     return left, __abs(a) - left * __abs(b)
 end
 
-local function long_division(a, b)
-    local Q = BigInt.new(0)
-    local R = a
-
-    while R >= b do
-        local quotient_digit = bisection_division(R, b)
-        R = R - quotient_digit * b
-        Q = Q + quotient_digit
-    end
-
-    return Q, R
-end
-
-
 local function __div(a, b)
     assert(b ~= BigInt.new(0), "Division by 0")
     local same_sign = __sign(a) == __sign(b)
-    local q, r = long_division(a, b)
+    local q, r = bisection_division(a, b)
 
     return ((same_sign and q) or -q), r
 end
@@ -390,9 +369,87 @@ local function __mod(a, b)
     return result
 end
 
+local function textbook_mul(a, b)
+    local SPLIT_BASE = 2^26
+    local BASE = BigInt.BASE
+    local a_digits = a.digits
+    local b_digits = b.digits
+    local result = {}
+    local len = #a_digits + #b_digits
+
+    for i = 1, len do
+        result[i] = 0
+    end
+
+    for i = 1, #a_digits do
+        local carry_row = 0
+        for j = 1, #b_digits do
+            local pos = i + j - 1
+
+            local a_i = a_digits[i]
+            local a_hi = math.floor(a_i / SPLIT_BASE)
+            local a_lo = a_i % SPLIT_BASE
+
+            local b_j = b_digits[j]
+            local b_hi = math.floor(b_j / SPLIT_BASE)
+            local b_lo = b_j % SPLIT_BASE
+
+            local term1 = a_hi * b_hi
+            local term2 = a_hi * b_lo
+            local term3 = a_lo * b_hi
+            local term4 = a_lo * b_lo
+
+            local term23 = term2 + term3
+            local term23_hi = math.floor(term23 / SPLIT_BASE)
+            local term23_lo = term23 % SPLIT_BASE
+
+
+            local low = term4 + term23_lo * SPLIT_BASE
+            local carry1 = math.floor(low / BASE)
+            local digit_part = low % BASE
+
+            local total_carry = term1 + term23_hi + carry1
+
+
+            local temp = result[pos] + digit_part + carry_row
+            carry_row = math.floor(temp / BASE)
+            result[pos] = temp % BASE
+
+
+            carry_row = carry_row + total_carry
+        end
+
+
+        local pos = i + #b_digits
+        while carry_row ~= 0 do
+            if pos > #result then
+                table.insert(result, 0)
+            end
+            local temp = result[pos] + carry_row
+            carry_row = math.floor(temp / BASE)
+            result[pos] = temp % BASE
+            pos = pos + 1
+        end
+    end
+
+    result = __remove_trailing_zeros(result)
+
+    if #result == 0 then
+        return BigInt.new(0)
+    end
+
+    return BigInt.new(result)
+end
+
+local KARATSUBA_DIGITS_THRESHOLD = math.huge -- math.huge 2000
+
 local function karatsuba_mul(a, b)
     local bigger = __max(a, b)
     local smaller = __min(a, b)
+
+    if __amount_digits(bigger) <= KARATSUBA_DIGITS_THRESHOLD then
+        return textbook_mul(a, b)
+    end
 
     if __amount_digits(bigger) <= 1 then
         if bigger.digits[1] <= math.sqrt(BASE) then
@@ -422,6 +479,7 @@ local function karatsuba_mul(a, b)
         local result = (BigInt.new(z0) + (z1 * BigInt.new(Bm))) + BigInt.new({0, z2})
         return BigInt.new(__remove_trailing_zeros(result.digits))
     end
+
     local half = math.ceil(__amount_digits(bigger) / 2)
     local a_digits = bigger.digits
     local b_digits = smaller.digits
@@ -429,16 +487,21 @@ local function karatsuba_mul(a, b)
     local a0 = BigInt.new(slice(a_digits, 1, half))
     local a1 = BigInt.new(slice(a_digits, half + 1, #a_digits))
     local b0 = BigInt.new(slice(b_digits, 1, math.min(half, #b_digits)))
-    local b1 = BigInt.new(fill(slice(b_digits, math.min(half, #b_digits) + 1, #b_digits), 1)) -- if b1 is empty => {0}
+
+    local b1_digits = slice(b_digits, math.min(half, #b_digits) + 1, #b_digits)
+    if #b1_digits == 0 then
+        b1_digits = {0}
+    end
+    local b1 = BigInt.new(b1_digits)
 
     local z0 = a0 * b0
     local z2 = a1 * b1
     local z3 = (a0 + a1) * (b0 + b1)
     local z1 = z3 - z0 - z2
-    
+
     local z0_digits = z0.digits
-    local z1_digits = join(fill({}, half), z1.digits)
-    local z2_digits = join(fill({}, half * 2), z2.digits)
+    local z1_digits = pad(z1.digits, half)
+    local z2_digits = pad(z2.digits, half)
 
     z0 = BigInt.new(z0_digits)
     z1 = BigInt.new(z1_digits)
@@ -446,72 +509,6 @@ local function karatsuba_mul(a, b)
 
     return BigInt.new(__remove_trailing_zeros((z0 + z1 + z2).digits))
 end
-
--- cretino impara come si fanno le moltiplicazioni da scuola elementare che l'algoritmo sta sulla luna
-local function textbook_mul(a, b)
-    local SPLIT_BASE = math.sqrt(BASE)
-    local a_digits = a.digits
-    local b_digits = b.digits
-
-    local result_digits = {}
-    local max_pos = #a_digits + #b_digits - 1
-    for i = 1, max_pos + 1 do
-        result_digits[i] = 0
-    end
-
-
-    for i = 1, #a_digits do
-        local carry = 0
-        for j = 1, #b_digits do
-            local pos = i + j - 1
-            local a0 = a_digits[i] % SPLIT_BASE
-            local a1 = math.floor(a_digits[i] / SPLIT_BASE)
-
-            local b0 = b_digits[i] % SPLIT_BASE
-            local b1 = math.floor(b_digits[i] / SPLIT_BASE)
-
-            local c0 = a0 * b0
-            local c2_carry = 0
-            local c1, remainder = safe_add(a0 * b1, a1 * b0)
-            if remainder then
-                c2_carry = 1
-            end
-
-            if c1 >= SPLIT_BASE then
-                c2_carry = c2_carry + math.floor(c1 / SPLIT_BASE)
-                c1 = c1 % SPLIT_BASE
-            end
-
-            local c2 = a1 * b1 + c2_carry
-            carry = c2
-
-            local current = c0 + c1 * SPLIT_BASE
-            result_digits[pos] = current
-        end
-
-        -- this is 99% not correct
-        local pos = i + #b_digits
-        while carry > 0 do
-            local sum = result_digits[pos] + carry
-            if BASE - carry <= result_digits[pos] then
-                sum = - BASE + result_digits[pos] + carry
-            end
-            result_digits[pos] = sum
-            carry = math.floor(sum / BASE)
-            pos = pos + 1
-        end
-    end
-    
-    __remove_trailing_zeros(result_digits)
-
-    if #result_digits == 0 then
-        result_digits = {0}
-    end
-
-    return BigInt.new(result_digits)
-end
-
-local KARATSUBA_DIGITS_THRESHOLD = 1
 
 local function __mul(a, b)
     if __sign(a) ~= __sign(b) then
@@ -526,7 +523,7 @@ local function __mul(a, b)
         return karatsuba_mul(a, b)
     end
 
-    return textbook_mul(a, b) -- da cambiare in textbook_mul
+    return textbook_mul(a, b)
 end
 
 local function __tostring(x)
@@ -559,6 +556,16 @@ local function __le(a, b)
     return __lt(a, b) or __eq(a, b)
 end
 
+local function __pow(a, b)
+    local result = BigInt.new(1)
+    local i = BigInt.new(1)
+    while i <= b do
+        i = i + BigInt.new(1)
+        result = result * b
+    end
+    return result
+end
+
 BigInt.__add = typecheck(__add)
 BigInt.__sub = typecheck(__sub)
 BigInt.__mod = typecheck(__mod)
@@ -569,6 +576,7 @@ BigInt.__unm = typecheck(__unm)
 BigInt.__lt = typecheck(__lt)
 BigInt.__eq = typecheck(__eq)
 BigInt.__le = typecheck(__le)
+BigInt.__pow = typecheck(__pow)
 
 
 return BigInt
