@@ -42,8 +42,8 @@ local function pad(array, amount)
 end
 
 function BigInt.format(x)
-    local is_number = type(x) ~= "number"
-    local is_big_int = type(x) ~= "table" and BigInt.__is_big_int(x)
+    local is_number = type(x) == "number"
+    local is_big_int = type(x) == "table" and BigInt.__is_big_int(x)
 
     if is_number then
         return string.format("%.f", x)
@@ -85,7 +85,7 @@ function BigInt.__is_big_int(x)
     return type(x) == "table" and getmetatable(x) == BigInt
 end
 
-function BigInt.new(x)
+function BigInt.new(x, sign)
     if PRELOADED[x] then
         return PRELOADED[x]
     end
@@ -111,8 +111,7 @@ function BigInt.new(x)
 
     local self = {}
     self.digits = digits
-    self.sign = ((self.digits[1] < 0) and -1) or 1
-    self.digits[1] = math.abs(self.digits[1])
+    self.sign = sign or 1
     
     return setmetatable(self, BigInt)
 end
@@ -163,9 +162,7 @@ local function __add(a, b)
         table.insert(digits, carry)
     end
 
-    digits[1] = digits[1] * __sign(a)
-
-    return BigInt.new(digits)
+    return BigInt.new(digits, __sign(a))
 end
 
 local function __max(a, b)
@@ -217,7 +214,7 @@ local function __sub(a, b)
     end
 
     local result = BigInt.new(__remove_trailing_zeros(digits))
-    return ((bigger == __abs(a)) and result) or -result
+    return ((__abs(a) > __abs(b)) and result) or -(result)
 end
 
 local function __eq(a, b)
@@ -264,14 +261,12 @@ local function __lt(a, b)
     return true
 end
 
-local function __shr(a, b)
-    b = ((b == nil) and BigInt.new(1)) or b
-
+local function __lsl(a, b)
     if b ~= BigInt.new(1) then
         local result = a
         local i = BigInt.new(1)
         while i <= b do
-            result = __shr(result, BigInt.new(1))
+            result = __lsl(result, BigInt.new(1))
             i = i + BigInt.new(1)
         end
         return result * BigInt.new(__sign(a)) * BigInt.new(__sign(b))
@@ -289,19 +284,17 @@ local function __shr(a, b)
         digits[i] = result
     end
 
-    digits[1] = digits[1] * __sign(a)
     return BigInt.new(__remove_trailing_zeros(digits)) * BigInt.new(__sign(a)) * BigInt.new(__sign(b))
 end
 
-local function __shl(a, b)
-    assert(b % 1 == 0, "b must be a whole number")
+local function __lsr(a, b)
     b = ((b == nil) and BigInt.new(1)) or b
 
     if b ~= BigInt.new(1) then
         local result = a
         local i = BigInt.new(1)
         while i <= b do
-            result = __shl(result, BigInt.new(1))
+            result = __lsr(result, BigInt.new(1))
             i = i + BigInt.new(1)
         end
         return result
@@ -324,8 +317,7 @@ local function __shl(a, b)
         table.insert(digits, carry)
     end
 
-    digits[1] = digits[1] * __sign(a)
-    return BigInt.new(digits)
+    return BigInt.new(digits, __sign(a))
 end
 
 local function bisection_division(a, b)
@@ -333,7 +325,7 @@ local function bisection_division(a, b)
     local right = __abs(a)
 
     while __abs(right - left) > BigInt.new(1) do
-        local middle = __shr(right - left, BigInt.new(1)) + left
+        local middle = __lsl(right - left, BigInt.new(1)) + left
         local result = (middle * __abs(b)) - __abs(a)
 
         if result <= BigInt.new(0) then
@@ -356,12 +348,26 @@ local function bisection_division(a, b)
     return left, __abs(a) - left * __abs(b)
 end
 
+local function goldschmidt_division(a, b)
+    while __amount_digits(b) > 1 do
+        b = __lsl(b, BigInt.new(1))
+        a = __lsl(a, BigInt.new(1))
+    end
+    return bisection_division(a, b)
+end
+
 local function __div(a, b)
     assert(b ~= BigInt.new(0), "Division by 0")
-    local same_sign = __sign(a) == __sign(b)
-    local q, r = bisection_division(a, b)
+    local sign = __sign(a) * __sign(b)
 
-    return ((same_sign and q) or -q), r
+    if __amount_digits(a) == 1 and __amount_digits(b) == 1 then
+        local result = math.floor(a.digits[1] / b.digits[1])
+        return BigInt.new(result, sign)
+    end
+
+    local q, r = goldschmidt_division(a, b)
+
+    return BigInt.new(q.digits, sign), r
 end
 
 local function __mod(a, b)
@@ -441,7 +447,7 @@ local function textbook_mul(a, b)
     return BigInt.new(result)
 end
 
-local KARATSUBA_DIGITS_THRESHOLD = math.huge -- math.huge 2000
+local KARATSUBA_DIGITS_THRESHOLD = math.huge
 
 local function karatsuba_mul(a, b)
     local bigger = __max(a, b)
@@ -547,9 +553,7 @@ local function __tostring(x)
 end
 
 local function __unm(x)
-    local digits = {unpack(x.digits)}
-    digits[1] = -digits[1] * __sign(x)
-    return BigInt.new(digits)
+    return BigInt.new({unpack(x.digits)}, -1 * __sign(x))
 end
 
 local function __le(a, b)
@@ -574,9 +578,11 @@ BigInt.__mul = typecheck(__mul)
 BigInt.__tostring = typecheck(__tostring)
 BigInt.__unm = typecheck(__unm)
 BigInt.__lt = typecheck(__lt)
-BigInt.__eq = typecheck(__eq)
+BigInt.__eq = __eq
 BigInt.__le = typecheck(__le)
 BigInt.__pow = typecheck(__pow)
+BigInt.__lsl = typecheck(__lsl)
+BigInt.__lsr = typecheck(__lsr)
 
 
 return BigInt

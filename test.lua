@@ -61,10 +61,12 @@ random_test(x, BigInt.new)
 time_since_last_call("Finish BigInt") ]]
 
 
-local a = factorial_big_int(BigInt.new(4))
-local b = BigInt.new(BigInt.BASE - 2) * BigInt.new(BigInt.BASE - 2)
+local a = factorial_big_int(BigInt.new(1000))
+local b = factorial_big_int(BigInt.new(999))
 
+time_since_last_call("Start Division")
 test_print(a / b)
+time_since_last_call("End")
 
 --[[ time_since_last_call("Start BigNum")
 random_test(x, BigNum.new)
