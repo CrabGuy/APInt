@@ -1,19 +1,14 @@
+--!nocheck
+--!nolint
+
 local BigInt = require("./BigInt")
-
-local last_time = os.clock()
-
-local function time_since_last_call(label)
-    local current_time = os.clock()
-    local elapsed = current_time - last_time
-    last_time = current_time
-    print(string.format("[TIMER] %s: %.6f seconds", label or "Elapsed time", elapsed))
-    return elapsed
-end
+require 'busted.runner'()
 
 local format = BigInt.format
 local test_print = BigInt.test_print
+local BASE = BigInt.BASE
 
-local function factorial_big_int(x)
+local function factorial(x)
     x = BigInt.new(x)
     local result = BigInt.new(1)
     while true do
@@ -22,14 +17,6 @@ local function factorial_big_int(x)
         end
         result = result * x
         x = x - BigInt.new(1)
-    end
-end
-
-local function test_operation(name, custom, default)
-    return function(a, b)
-        local own = custom(BigInt.new(a), BigInt.new(b))
-        local library = default(a, b)
-        assert(own.digits[1] == library, string.format("\na: %d, b: %d\n%s(a, b) = {%s}, correct_%s(a, b) = %s", a, b, name, format(own), name, format(library)))
     end
 end
 
@@ -44,62 +31,97 @@ local function fibonacci(x)
     return a
 end
 
-local test_division = test_operation("div", function(a, b) return a / b end, function(a, b) return math.floor(a / b) end)
-local test_multiplication = test_operation("mul", function(a, b) return a * b end, function(a, b) return a * b end)
+-- according to https://www.lua.org/manual/5.2/manual.html#2.4
 
-local function random_test(amount, constructor)
-    for i = 1, amount do
-        test_division(math.random(1, BigInt.BASE - 1), math.random(1, BigInt.BASE - 1))
-        --local result = constructor() / constructor(math.random(1, BigInt.BASE - 1))
-    end
-end
+describe("Operations", function()
+    test("Creates a new value", function()
+        assert.are.same({1}, BigInt.new(1))
 
---[[ local x = 1000
+        assert.are.same({-1}, BigInt.new(-1))
 
-time_since_last_call("Start BigInt")
-random_test(x, BigInt.new)
-time_since_last_call("Finish BigInt") ]]
+        assert.are.same({0, 1}, BigInt.new({0, 1}))
 
+        assert.are.same({-1, 2, 3, 4}, BigInt.new({-1, 2, 3, 4}))
 
-local a = factorial_big_int(BigInt.new(1000))
-local b = factorial_big_int(BigInt.new(999))
+        assert.are.same({1}, BigInt.new(BigInt.new(1)))
 
-time_since_last_call("Start Division")
-test_print(a / b)
-time_since_last_call("End")
+        assert.has_error(function() BigInt.new(BASE) end)
 
---[[ time_since_last_call("Start BigNum")
-random_test(x, BigNum.new)
-time_since_last_call("Finish BigNum") ]]
+        assert.has_error(function() BigInt.new({BASE, BASE}) end)
 
---[[ time_since_last_call("Start BigInt")
-random_test(AMOUNT, BigInt.new)
-time_since_last_call("Finish BigInt")
+        assert.has_error(function() BigInt.new({1, -2, 3, 4}) end)
+    end)
 
-time_since_last_call("Start BigNum")
-random_test(AMOUNT, BigNum.new)
-time_since_last_call("Finish BigNum") ]]
+    test("Addition", function()
+        assert.are.same({4}, BigInt.new(2) + BigInt.new(2)) -- quick math
 
+        assert.are.same({4503599627370494, 1}, BigInt.new(BASE - 1) + BigInt.new(BASE - 1))
 
+        assert.are.same({0, 4503599627370494, 1}, BigInt.new({0, BASE - 1}) + BigInt.new({0, BASE - 1}))
 
---test_print(factorial(BigInt.new(120)))
+        assert.are.same({1}, BigInt.new(5) + BigInt.new(-4))
 
---[[ local a = factorial(BigInt.new(50))
-local b = BigInt.new(5)
+        assert.are.same({-1}, BigInt.new(5) + BigInt.new(-6))
 
-local q = a / b
-local r = a % b
-print("q", format(q), "r", format(r))
+        assert.are.same({0, 1}, BigInt.new(BASE / 2) + BigInt.new(BASE / 2))
+    end)
 
-print(a)
- ]]
+    test("Subtraction", function()
+        assert.are.same({1}, BigInt.new(2) - BigInt.new(1))
 
---[[ time_since_last_call("Tests")
-for i = 1, 1000 do
-    local x = math.random(1, 30)
-    print(string.format("factorial(%d)", x))
-    factorial(BigInt.new(x))
-end
-time_since_last_call("Tests") ]]
+        assert.are.same({0, 1}, BigInt.new({0, 0, 1}) - BigInt.new({0, BASE - 1}))
 
--- [4, 4503599627370492]
+        assert.are.same({3 - (BASE - 1)}, BigInt.new({3}) - BigInt.new({BASE - 1}))
+
+        assert.are.same({9}, BigInt.new(5) - BigInt.new(-4))
+
+        assert.are.same({-1}, BigInt.new(5) + BigInt.new(-6))
+    end)
+
+    test("Multiplication (oh god)", function()
+        assert.are.same({4}, BigInt.new(2) * BigInt.new(2))
+
+        assert.are.same({-6}, BigInt.new(-2) * BigInt.new(3))
+
+        assert.are.same({0}, BigInt.new(420) * BigInt.new(0))
+
+        assert.are.same({0, 1}, BigInt.new(math.sqrt(BASE)) * BigInt.new(math.sqrt(BASE)))
+
+        assert.are.same({0, -1}, BigInt.new(-math.sqrt(BASE)) * BigInt.new(math.sqrt(BASE)))
+
+        assert.are.same({120}, factorial(BigInt.new(5)))
+
+        assert.are.same({958209396572160, 540}, factorial(BigInt.new(20)))
+    end)
+
+    test("Division (oh god even more)", function()
+        assert.are.same({2}, BigInt.new(4) / BigInt.new(2))
+
+        assert.are.same({-3}, BigInt.new(-6) / BigInt.new(2))
+
+        assert.are.same({2}, BigInt.new(7) / BigInt.new(3))
+
+        assert.are.same({2}, BigInt.new(-12) / BigInt.new(-5))
+
+        assert.are.same({0}, BigInt.new(0) / BigInt.new(420))
+        
+        assert.are.same(BigInt.new(math.sqrt(BASE)), BigInt.new({0, 1}) / BigInt.new(math.sqrt(BASE)))
+        
+        assert.has_error(function() return BigInt.new(10) / BigInt.new(0) end)
+    end)
+
+    pending("Mod")
+    pending("Pow")
+    pending("Unm")
+    -- no concat
+    -- no len
+    pending("Eq")
+    pending("Lt")
+    pending("Le")
+    -- no index
+    -- no new_index (should make it readonly tho)
+    -- no call (should make the .new a call)
+    pending("Lsl")
+    pending("Lsr")
+    pending("Tostring")
+end)

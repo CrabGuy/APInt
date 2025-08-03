@@ -1,5 +1,3 @@
-local MODE = "STRICT"
-
 -- use enums to make everything more clear when refactoring
 
 --[[ local enum = function(keys)
@@ -15,10 +13,28 @@ BigInt.__index = BigInt
 local POWER = 52
 local BASE = 2^POWER -- MAX 2^53
 BigInt.BASE = BASE
+BigInt.MODE = "STRICT"
 local PRELOADED = {}
 
 
 assert(POWER % 2 == 0, "POWER must be an even number for multiplication to work properly")
+
+local function first_non_zero(array)
+    local first = nil
+
+    for i, v in pairs(array) do
+        if v ~= 0 then
+            first = i
+            break
+        end
+    end
+
+    if first == nil then
+        return 0, 0
+    end
+
+    return array[first], first
+end
 
 local function slice(array, i, j)
     local result = {}
@@ -41,6 +57,10 @@ local function pad(array, amount)
     return result
 end
 
+local function __sign(x)
+    return (first_non_zero(x) >= 0 and 1) or -1
+end
+
 function BigInt.format(x)
     local is_number = type(x) == "number"
     local is_big_int = type(x) == "table" and BigInt.__is_big_int(x)
@@ -52,12 +72,12 @@ function BigInt.format(x)
     assert(is_big_int, "Format argument is not a number")
 
     local digits = {}
-    for i, v in pairs(x.digits) do
+    for i, v in pairs(x) do
         table.insert(digits, string.format("%.f", v))
     end
 
     local text = table.concat(digits, ", ")
-    return x.sign == 1 and text or ("-" .. text)
+    return text
 end
 
 function BigInt.test_print(x)
@@ -69,10 +89,12 @@ local function typecheck(f)
         local arguments = {...}
         for i, v in pairs(arguments) do
             if not BigInt.__is_big_int(v) then
-                if MODE == "STRICT" then
+                if BigInt.MODE == "STRICT" then
                     error("Argument for operation was not BIGINT")
                 else
-                    print("Argument for operation was not a BIGINT, converted")
+                    if BigInt.MODE == "WARNING" then
+                        print("Argument for operation was not a BIGINT, converted")
+                    end
                     arguments[i] = BigInt.new(v)
                 end
             end
@@ -85,35 +107,35 @@ function BigInt.__is_big_int(x)
     return type(x) == "table" and getmetatable(x) == BigInt
 end
 
-function BigInt.new(x, sign)
+function BigInt.new(x)
     if PRELOADED[x] then
         return PRELOADED[x]
     end
-
     if BigInt.__is_big_int(x) then
         return x
     end
 
     assert(type(x) == "number" or type(x) == "table", "Argument of new must be an integer or a BigInt table rappresentation")
-    
-    if type(x) == "number" then
-        assert(x % 1 == 0, "Argument of x must be a whole number")
-        assert((-BASE < x) and (x < BASE), "Argument must be between " .. string.format("%.f", -BASE) .. " and " .. string.format("%.f", BASE))
-    end
 
-    local digits = x --table
+    local digits
+
     if type(x) == "number" then
+        assert(x % 1 == 0, "The number passed must be a whole number")
+        assert((-BASE < x) and (x < BASE), "Argument must be between " .. string.format("%.f", -BASE) .. " and " .. string.format("%.f", BASE))
         digits = {x}
     end
-    for i, v in pairs(digits) do
-        assert(-BASE < v and v < BASE, "Every elements of the digits table needs to be between " .. string.format("%.f", -BASE) .. " and " .. string.format("%.f", BASE))
+    if type(x) == "table" then
+        local first, start = first_non_zero(x)
+        assert(first, "First of the digits table needs to be between " .. string.format("%.f", -BASE) .. " and " .. string.format("%.f", BASE))
+        for i = start + 1, #x do
+            local v = x[i]
+            assert(0 <= v and v < BASE, "Every element after the first of the digits table needs to be between 0 (inclusive) and " .. string.format("%.f", BASE))
+        end
+        digits = x
     end
 
-    local self = {}
-    self.digits = digits
-    self.sign = sign or 1
-    
-    return setmetatable(self, BigInt)
+    assert(digits ~= nil)
+    return setmetatable(digits, BigInt)
 end
 
 -- Preloading some numbers like python does
@@ -121,24 +143,24 @@ for i = -5, 256 do
     PRELOADED[i] = BigInt.new(i)
 end
 
-
-
-
-local function __sign(x)
-    return x.sign
-end
-
 local function __amount_digits(x)
-    return #x.digits
+    return #x
 end
 
 local function __abs(x)
-    return BigInt.new(x.digits)
+    local clone = {unpack(x)}
+    local _, first = first_non_zero(x)
+    if first == 0 then
+        return BigInt.new(0)
+    end
+    clone[first] = math.abs(clone[first])
+
+    return BigInt.new(clone)
 end
 
 local function __add(a, b)
     if __sign(a) ~= __sign(b) then
-        return ((__sign(a) == 1) and __abs(a) - __abs(b)) or __abs(b) - __abs(a)
+        return ((__sign(a) == 1) and (__abs(a) - __abs(b))) or (__abs(b) - __abs(a))
     end
 
     local digits = {}
@@ -146,8 +168,8 @@ local function __add(a, b)
 
     local i = 1
     while (i <= __amount_digits(a)) or (i <= __amount_digits(b)) do
-        local a0 = a.digits[i] or 0
-        local b0 = b.digits[i] or 0
+        local a0 = a[i] or 0
+        local b0 = b[i] or 0
         if BASE - b0 <= a0 + carry then
             table.insert(digits, (b0 - BASE) + a0 + carry)
             carry = 1
@@ -198,12 +220,13 @@ local function __sub(a, b)
     local bigger = __max(__abs(a), __abs(b))
     local smaller = __min(__abs(a), __abs(b))
 
+
     local digits = {}
     local carry = 0
 
     local i = 1
     while i <= __amount_digits(bigger) do
-        local subtraction = bigger.digits[i] - (smaller.digits[i] or 0) - carry
+        local subtraction = bigger[i] - (smaller[i] or 0) - carry
         carry = 0
         if subtraction < 0 then
             subtraction = BASE + subtraction
@@ -214,7 +237,7 @@ local function __sub(a, b)
     end
 
     local result = BigInt.new(__remove_trailing_zeros(digits))
-    return ((__abs(a) > __abs(b)) and result) or -(result)
+    return ((__abs(a) > __abs(b)) and result) or -result
 end
 
 local function __eq(a, b)
@@ -227,7 +250,7 @@ local function __eq(a, b)
     end
 
     for i = 1, __amount_digits(a) do
-        if a.digits[i] ~= b.digits[i] then
+        if a[i] ~= b[i] then
             return false
         end
     end
@@ -249,8 +272,8 @@ local function __lt(a, b)
     end
 
     for i = __amount_digits(a), 1, -1 do
-        if a.digits[i] ~= b.digits[i] then
-            if not (a.digits[i] < b.digits[i]) then
+        if a[i] ~= b[i] then
+            if not (a[i] < b[i]) then
                 return false
             else
                 break
@@ -274,13 +297,13 @@ local function __lsl(a, b)
 
     local digits = {}
     local carry = 0
-    for i = #a.digits, 1, -1 do
-        local result = math.floor(a.digits[i] / 2)
+    for i = #a, 1, -1 do
+        local result = math.floor(a[i] / 2)
         if carry == 1 then
             result = result + BASE/2
         end
         carry = 0
-        carry = a.digits[i] % 2
+        carry = a[i] % 2
         digits[i] = result
     end
 
@@ -302,9 +325,9 @@ local function __lsr(a, b)
 
     local digits = {}
     local carry = 0
-    for i = 1, #a.digits do
+    for i = 1, #a do
         local old_carry = carry
-        digits[i] = a.digits[i]
+        digits[i] = a[i]
         carry = 0
         if digits[i] > (BASE/2) then
             digits[i] = digits[i] % (BASE/2)
@@ -361,13 +384,13 @@ local function __div(a, b)
     local sign = __sign(a) * __sign(b)
 
     if __amount_digits(a) == 1 and __amount_digits(b) == 1 then
-        local result = math.floor(a.digits[1] / b.digits[1])
-        return BigInt.new(result, sign)
+        local result = math.floor(a[1] / b[1])
+        return BigInt.new(result)
     end
 
     local q, r = goldschmidt_division(a, b)
 
-    return BigInt.new(q.digits, sign), r
+    return BigInt.new(sign == 1 and q or -q), r
 end
 
 local function __mod(a, b)
@@ -378,8 +401,8 @@ end
 local function textbook_mul(a, b)
     local SPLIT_BASE = 2^26
     local BASE = BigInt.BASE
-    local a_digits = a.digits
-    local b_digits = b.digits
+    local a_digits = a
+    local b_digits = b
     local result = {}
     local len = #a_digits + #b_digits
 
@@ -458,14 +481,14 @@ local function karatsuba_mul(a, b)
     end
 
     if __amount_digits(bigger) <= 1 then
-        if bigger.digits[1] <= math.sqrt(BASE) then
-            if bigger.digits[1] == smaller.digits[1] and bigger.digits[1] == math.sqrt(BASE) then
+        if bigger[1] <= math.sqrt(BASE) then
+            if bigger[1] == smaller[1] and bigger[1] == math.sqrt(BASE) then
                 return BigInt.new({0, 1})
             end
-            return BigInt.new(bigger.digits[1] * smaller.digits[1])
+            return BigInt.new(bigger[1] * smaller[1])
         end
-        a = a.digits[1]
-        b = b.digits[1]
+        a = a[1]
+        b = b[1]
 
         local m = POWER / 2
         local B = 2
@@ -483,12 +506,12 @@ local function karatsuba_mul(a, b)
         local z3 = BigInt.new(a0 + a1) * BigInt.new(b0 + b1)
         local z1 = z3 - BigInt.new(z2) - BigInt.new(z0)
         local result = (BigInt.new(z0) + (z1 * BigInt.new(Bm))) + BigInt.new({0, z2})
-        return BigInt.new(__remove_trailing_zeros(result.digits))
+        return BigInt.new(__remove_trailing_zeros(result))
     end
 
     local half = math.ceil(__amount_digits(bigger) / 2)
-    local a_digits = bigger.digits
-    local b_digits = smaller.digits
+    local a_digits = bigger
+    local b_digits = smaller
 
     local a0 = BigInt.new(slice(a_digits, 1, half))
     local a1 = BigInt.new(slice(a_digits, half + 1, #a_digits))
@@ -505,15 +528,15 @@ local function karatsuba_mul(a, b)
     local z3 = (a0 + a1) * (b0 + b1)
     local z1 = z3 - z0 - z2
 
-    local z0_digits = z0.digits
-    local z1_digits = pad(z1.digits, half)
-    local z2_digits = pad(z2.digits, half)
+    local z0_digits = z0
+    local z1_digits = pad(z1, half)
+    local z2_digits = pad(z2, half)
 
     z0 = BigInt.new(z0_digits)
     z1 = BigInt.new(z1_digits)
     z2 = BigInt.new(z2_digits)
 
-    return BigInt.new(__remove_trailing_zeros((z0 + z1 + z2).digits))
+    return BigInt.new(__remove_trailing_zeros((z0 + z1 + z2)))
 end
 
 local function __mul(a, b)
@@ -534,7 +557,7 @@ end
 
 local function __tostring(x)
     if __amount_digits(x) == 1 then
-        return string.format("%.f", __sign(x) * x.digits[1])
+        return string.format("%.f", __sign(x) * x[1])
     end
     local sign = __sign(x)
 
@@ -545,6 +568,7 @@ local function __tostring(x)
         text = tostring(remainder) .. text
     end
 
+    -- fix this because it probably doesn't work, i changed how you rappresent numbers
     if sign == -1 then
         text = "-" .. text
     end
@@ -553,13 +577,22 @@ local function __tostring(x)
 end
 
 local function __unm(x)
-    return BigInt.new({unpack(x.digits)}, -1 * __sign(x))
+    local clone = {unpack(x)}
+    local _, first = first_non_zero(x)
+    if first == 0 then
+        return BigInt.new(0)
+    end
+
+    clone[first] = clone[first] * -1
+
+    return BigInt.new(clone)
 end
 
 local function __le(a, b)
     return __lt(a, b) or __eq(a, b)
 end
 
+-- lazy
 local function __pow(a, b)
     local result = BigInt.new(1)
     local i = BigInt.new(1)

@@ -21,8 +21,8 @@ def factorial(x):
         return 1
     return factorial(x - 1) * x
 
-number = ((BASE // 2) ** 2) // (BASE - 2)
-test = [1125899906842624]
+number = factorial(20)
+test = [0, 4503599627370494, 1]
 print(number == f(test))
 print(number)
 print(f(test))
