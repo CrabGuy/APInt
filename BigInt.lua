@@ -57,6 +57,7 @@ local function pad(array, amount)
     return result
 end
 
+-- make it so the sign is stored in the last digit so its O(1)
 local function __sign(x)
     return (first_non_zero(x) >= 0 and 1) or -1
 end
@@ -107,6 +108,7 @@ function BigInt.__is_big_int(x)
     return type(x) == "table" and getmetatable(x) == BigInt
 end
 
+-- make it so these numbers can be used in numbered for loops
 function BigInt.new(x)
     if PRELOADED[x] then
         return PRELOADED[x]
@@ -376,7 +378,9 @@ local function goldschmidt_division(a, b)
         b = __lsl(b, BigInt.new(1))
         a = __lsl(a, BigInt.new(1))
     end
-    return bisection_division(a, b)
+
+    local q, r = bisection_division(a, b)
+    return q, r
 end
 
 local function __div(a, b)
@@ -385,7 +389,7 @@ local function __div(a, b)
 
     if __amount_digits(a) == 1 and __amount_digits(b) == 1 then
         local result = math.floor(a[1] / b[1])
-        return BigInt.new(result)
+        return BigInt.new(result), BigInt.new(a[1] - math.floor(a[1] / b[1]) * b[1])
     end
 
     local q, r = goldschmidt_division(a, b)
@@ -588,20 +592,23 @@ local function __unm(x)
     return BigInt.new(clone)
 end
 
-local function __le(a, b)
-    return __lt(a, b) or __eq(a, b)
-end
-
 -- lazy
 local function __pow(a, b)
+    if b < BigInt.new(0) then
+        assert(a ~= BigInt.new(0), "Negative power of 0")
+        return (a == BigInt.new(1) and BigInt.new(1)) or BigInt.new(0)
+    end
+
     local result = BigInt.new(1)
     local i = BigInt.new(1)
     while i <= b do
         i = i + BigInt.new(1)
-        result = result * b
+        result = result * a
     end
     return result
 end
+
+--refactor so it adds typechecking to every metamethod and then just assigns eq back
 
 BigInt.__add = typecheck(__add)
 BigInt.__sub = typecheck(__sub)
@@ -612,7 +619,6 @@ BigInt.__tostring = typecheck(__tostring)
 BigInt.__unm = typecheck(__unm)
 BigInt.__lt = typecheck(__lt)
 BigInt.__eq = __eq
-BigInt.__le = typecheck(__le)
 BigInt.__pow = typecheck(__pow)
 BigInt.__lsl = typecheck(__lsl)
 BigInt.__lsr = typecheck(__lsr)
