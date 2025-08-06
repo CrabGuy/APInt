@@ -9,6 +9,7 @@
 end ]]
 
 local BigInt = {}
+local BigInt_metatable = {}
 BigInt.__index = BigInt
 local POWER = 52
 local BASE = 2^POWER -- MAX 2^53
@@ -18,23 +19,6 @@ local PRELOADED = {}
 
 
 assert(POWER % 2 == 0, "POWER must be an even number for multiplication to work properly")
-
-local function first_non_zero(array)
-    local first = nil
-
-    for i, v in pairs(array) do
-        if v ~= 0 then
-            first = i
-            break
-        end
-    end
-
-    if first == nil then
-        return 0, 0
-    end
-
-    return array[first], first
-end
 
 local function slice(array, i, j)
     local result = {}
@@ -59,7 +43,7 @@ end
 
 -- make it so the sign is stored in the last digit so its O(1)
 local function __sign(x)
-    return (first_non_zero(x) >= 0 and 1) or -1
+    return (x[#x] >= 0 and 1) or -1
 end
 
 function BigInt.format(x)
@@ -105,44 +89,7 @@ local function typecheck(f)
 end
 
 function BigInt.__is_big_int(x)
-    return type(x) == "table" and getmetatable(x) == BigInt
-end
-
--- make it so these numbers can be used in numbered for loops
-function BigInt.new(x)
-    if PRELOADED[x] then
-        return PRELOADED[x]
-    end
-    if BigInt.__is_big_int(x) then
-        return x
-    end
-
-    assert(type(x) == "number" or type(x) == "table", "Argument of new must be an integer or a BigInt table rappresentation")
-
-    local digits
-
-    if type(x) == "number" then
-        assert(x % 1 == 0, "The number passed must be a whole number")
-        assert((-BASE < x) and (x < BASE), "Argument must be between " .. string.format("%.f", -BASE) .. " and " .. string.format("%.f", BASE))
-        digits = {x}
-    end
-    if type(x) == "table" then
-        local first, start = first_non_zero(x)
-        assert(first, "First of the digits table needs to be between " .. string.format("%.f", -BASE) .. " and " .. string.format("%.f", BASE))
-        for i = start + 1, #x do
-            local v = x[i]
-            assert(0 <= v and v < BASE, "Every element after the first of the digits table needs to be between 0 (inclusive) and " .. string.format("%.f", BASE))
-        end
-        digits = x
-    end
-
-    assert(digits ~= nil)
-    return setmetatable(digits, BigInt)
-end
-
--- Preloading some numbers like python does
-for i = -5, 256 do
-    PRELOADED[i] = BigInt.new(i)
+    return type(x) == "table" and getmetatable(x) == BigInt_metatable
 end
 
 local function __amount_digits(x)
@@ -151,11 +98,10 @@ end
 
 local function __abs(x)
     local clone = {unpack(x)}
-    local _, first = first_non_zero(x)
-    if first == 0 then
+    if x[#x] == 0 then
         return BigInt.new(0)
     end
-    clone[first] = math.abs(clone[first])
+    clone[#clone] = math.abs(clone[#clone])
 
     return BigInt.new(clone)
 end
@@ -559,9 +505,10 @@ local function __mul(a, b)
     return textbook_mul(a, b)
 end
 
+-- put the digits in a table and then concat
 local function __tostring(x)
     if __amount_digits(x) == 1 then
-        return string.format("%.f", __sign(x) * x[1])
+        return string.format("%.f", x[1])
     end
     local sign = __sign(x)
 
@@ -572,7 +519,6 @@ local function __tostring(x)
         text = tostring(remainder) .. text
     end
 
-    -- fix this because it probably doesn't work, i changed how you rappresent numbers
     if sign == -1 then
         text = "-" .. text
     end
@@ -582,12 +528,11 @@ end
 
 local function __unm(x)
     local clone = {unpack(x)}
-    local _, first = first_non_zero(x)
-    if first == 0 then
+    if x[#x] == 0 then
         return BigInt.new(0)
     end
 
-    clone[first] = clone[first] * -1
+    clone[#clone] = clone[#clone] * -1
 
     return BigInt.new(clone)
 end
@@ -608,20 +553,62 @@ local function __pow(a, b)
     return result
 end
 
---refactor so it adds typechecking to every metamethod and then just assigns eq back
+function BigInt.new(x)
+    if PRELOADED[x] then
+        return PRELOADED[x]
+    end
+    if BigInt.__is_big_int(x) then
+        return x
+    end
 
-BigInt.__add = typecheck(__add)
-BigInt.__sub = typecheck(__sub)
-BigInt.__mod = typecheck(__mod)
-BigInt.__div = typecheck(__div)
-BigInt.__mul = typecheck(__mul)
-BigInt.__tostring = typecheck(__tostring)
-BigInt.__unm = typecheck(__unm)
-BigInt.__lt = typecheck(__lt)
-BigInt.__eq = __eq
-BigInt.__pow = typecheck(__pow)
-BigInt.__lsl = typecheck(__lsl)
-BigInt.__lsr = typecheck(__lsr)
+    assert(type(x) == "number" or type(x) == "table", "Argument of new must be an integer or a BigInt table rappresentation")
 
+    local digits
+
+    if type(x) == "number" then
+        assert(x % 1 == 0, "The number passed must be a whole number")
+        assert((-BASE < x) and (x < BASE), "Argument must be between " .. string.format("%.f", -BASE) .. " and " .. string.format("%.f", BASE))
+        digits = {x}
+    end
+    if type(x) == "table" then
+        local last = x[#x]
+        assert(-BASE < last and last < BASE, "Last element of the digits table needs to be between " .. string.format("%.f", -BASE) .. " and " .. string.format("%.f", BASE))
+        for i = 1, #x - 1 do
+            local v = x[i]
+            assert(0 <= v)
+            assert(0 <= v and v < BASE, "Every element except the last of the digits table needs to be between 0 (inclusive) and " .. string.format("%.f", BASE))
+        end
+        digits = x
+    end
+
+    assert(digits ~= nil)
+    return setmetatable(digits, BigInt_metatable) --read_only()
+end
+
+-- Preloading some numbers like python does
+for i = -5, 256 do
+    PRELOADED[i] = BigInt.new(i)
+end
+
+BigInt_metatable.__index = BigInt
+BigInt_metatable.__add = typecheck(__add)
+BigInt_metatable.__sub = typecheck(__sub)
+BigInt_metatable.__mod = typecheck(__mod)
+BigInt_metatable.__div = typecheck(__div)
+BigInt_metatable.__mul = typecheck(__mul)
+BigInt_metatable.__tostring = typecheck(__tostring)
+BigInt_metatable.__unm = typecheck(__unm)
+BigInt_metatable.__lt = typecheck(__lt)
+BigInt_metatable.__eq = __eq
+BigInt_metatable.__pow = typecheck(__pow)
+BigInt_metatable.__lsl = typecheck(__lsl)
+BigInt_metatable.__lsr = typecheck(__lsr)
+
+local call_proxy = {
+    __call = function(_, x)
+        return BigInt.new(x)
+    end
+}
+setmetatable(BigInt, call_proxy)
 
 return BigInt
