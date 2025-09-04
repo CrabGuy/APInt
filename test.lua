@@ -4,8 +4,6 @@
 local BigInt = require("./BigInt")
 require 'busted.runner'()
 
-local format = BigInt.format
-local test_print = BigInt.test_print
 local BASE = BigInt.BASE
 
 -- according to https://www.lua.org/manual/5.2/manual.html#2.4
@@ -94,9 +92,11 @@ describe("Operations", function()
         assert.are.same({2}, BigInt(-12) / BigInt(-5))
 
         assert.are.same({0}, BigInt(0) / BigInt(420))
-        
+
         assert.are.same(BigInt(math.sqrt(BASE)), BigInt({0, 1}) / BigInt(math.sqrt(BASE)))
-        
+
+        assert.are.same(BigInt({664333360460499, 3982308273631934, 3061069592710197}), BigInt({2310042140305905, 3779025547483650, 2759084521790143, 1333207883151640, 2871280155256532, 2361179593819894}) / BigInt({4380989235077369, 1317378481282125, 3473886240354038}))
+
         assert.has_error(function() return BigInt(10) / BigInt(0) end)
     end)
 
@@ -132,7 +132,7 @@ describe("Operations", function()
 
     -- no concatenation operator
 
-    -- no length operator (it returns the amount of digit of the number in BASE)
+    -- no length operator (it returns the amount of digit of the number in base BASE)
 
     test("Equal", function()
         assert.is_true(BigInt(1) == BigInt(1))
@@ -151,7 +151,7 @@ describe("Operations", function()
 
         assert.is_true(BigInt({0}) < BigInt({0, 1}))
 
-        assert.is_true(BigInt(3, 2, 1) < BigInt({1, 2, 3}))
+        assert.is_true(BigInt({3, 2, 1}) < BigInt({1, 2, 3}))
     end)
 
     test("To string", function()
@@ -184,7 +184,21 @@ describe("Operations", function()
     -- no new_index
 
     -- no call
-
-    pending("Lsl")
-    pending("Lsr")
 end)
+
+local function get_random_number(digits_amount)
+    local x = {}
+    for i = 1, digits_amount do
+        table.insert(x, math.random(1, BASE - 1))
+    end
+    return x
+end
+
+local TEST_AMOUNT = 1000
+
+for i = 1, TEST_AMOUNT do
+    local a = get_random_number(math.random(5, 10))
+    local b = get_random_number(math.random(1, 5))
+
+    local result = BigInt(a) / BigInt(b)
+end

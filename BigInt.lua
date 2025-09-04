@@ -28,6 +28,17 @@ local function slice(array, i, j)
     return result
 end
 
+local function invert(array)
+    local new = {}
+
+    for i = #array, 1, -1 do
+        table.insert(new, array[i])
+    end
+
+    return new
+end
+
+
 local function pad(array, amount)
     local result = {}
     for i = 1, amount do
@@ -54,7 +65,7 @@ function BigInt.format(x)
         return string.format("%.f", x)
     end
 
-    assert(is_big_int, "Format argument is not a number")
+--    assert(is_big_int, "Format argument is not a number")
 
     local digits = {}
     for i, v in pairs(x) do
@@ -291,6 +302,61 @@ local function __lsr(a, b)
     return BigInt.new(digits, __sign(a))
 end
 
+local function two_digit_division(a, b)
+    if __amount_digits(a) == 1 and __amount_digits(b) == 1 then
+        return a / b
+    end
+
+    assert(__amount_digits(a) == 2 and __amount_digits(b) == 1, "Invalid input for two digit division")
+
+    if a[2] > b[1] then
+        
+    end
+
+    local second = a[2] / b[1]
+    local floating = 1 / b[1]
+    second = math.floor(second)
+    local first = math.floor(floating * a[1] + (floating * BASE) * a[2])
+
+    local result_digits = __remove_trailing_zeros({first, second})
+    return BigInt.new(result_digits)
+end
+
+local function long_division(a, b)
+    assert(__amount_digits(b) == 1, "Amount of digits of b is greater than 1")
+    local quotient_digits = {} 
+
+    local current_a = nil
+    local index = #a - 1
+    local remainder = 0
+
+    if a[#a] < b[1] then
+        current_a = BigInt.new({a[#a - 1], a[#a]})
+        quotient_digits = {two_digit_division(current_a, b)[1]}
+        remainder = (current_a - BigInt.new(quotient_digits))[1]
+        index = index - 1
+    else
+        quotient_digits = {math.floor(a[#a] / b[1])}
+        remainder = a[#a] - quotient_digits[1] * b[1]
+    end
+
+    while index >= 1 do
+        current_a = BigInt.new(__remove_trailing_zeros({a[index], remainder}))
+        local result = two_digit_division(current_a, b)
+        table.insert(quotient_digits, result[1])
+        remainder = (current_a - b * result)[1]
+
+        index = index - 1
+    end
+
+    local correct_format = invert(quotient_digits)
+
+    local quotient = BigInt.new(correct_format)
+    local total_remainder = a - b * quotient
+
+    return quotient, total_remainder
+end
+
 local function bisection_division(a, b)
     local left = BigInt.new(0)
     local right = __abs(a)
@@ -325,7 +391,7 @@ local function goldschmidt_division(a, b)
         a = __lsl(a, BigInt.new(1))
     end
 
-    local q, r = bisection_division(a, b)
+    local q, r = long_division(a, b)
     return q, r
 end
 
@@ -340,7 +406,7 @@ local function __div(a, b)
 
     local q, r = goldschmidt_division(a, b)
 
-    return BigInt.new(sign == 1 and q or -q), r
+    return BigInt.new((sign == 1 and q) or -q), r
 end
 
 local function __mod(a, b)
@@ -388,7 +454,6 @@ local function textbook_mul(a, b)
             local digit_part = low % BASE
 
             local total_carry = term1 + term23_hi + carry1
-
 
             local temp = result[pos] + digit_part + carry_row
             carry_row = math.floor(temp / BASE)
@@ -609,6 +674,35 @@ local call_proxy = {
         return BigInt.new(x)
     end
 }
+
 setmetatable(BigInt, call_proxy)
 
+local function get_random_number(digits_amount)
+    local x = {}
+    for i = 1, digits_amount do
+        table.insert(x, math.random(1, BASE - 1))
+    end
+    return x
+end
+
+local TEST_AMOUNT = 1000
+
+--[[ for i = 1, TEST_AMOUNT do
+    local a = get_random_number(math.random(5, 10))
+    local b = get_random_number(math.random(1, 5))
+
+    print("A")
+    BigInt.test_print(a)
+    print("B")
+    BigInt.test_print(b)
+
+    
+    local result = BigInt(a) / BigInt(b)
+end ]]
+
+BigInt.test_print(BigInt({2310042140305905, 3779025547483650, 2759084521790143, 1333207883151640, 2871280155256532, 2361179593819894}) / BigInt({4380989235077369, 1317378481282125, 3473886240354038}))
+
 return BigInt
+
+-- 2310042140305905, 3779025547483650, 2759084521790143, 1333207883151640, 2871280155256532, 2361179593819894
+-- 4380989235077369, 1317378481282125, 3473886240354038
