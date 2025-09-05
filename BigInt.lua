@@ -65,7 +65,7 @@ function BigInt.format(x)
         return string.format("%.f", x)
     end
 
---    assert(is_big_int, "Format argument is not a number")
+    assert(is_big_int, "Format argument is not a number")
 
     local digits = {}
     for i, v in pairs(x) do
@@ -309,19 +309,20 @@ local function two_digit_division(a, b)
 
     assert(__amount_digits(a) == 2 and __amount_digits(b) == 1, "Invalid input for two digit division")
 
-    if a[2] > b[1] then
-        
-    end
 
     local second = a[2] / b[1]
-    local floating = 1 / b[1]
     second = math.floor(second)
-    local first = math.floor(floating * a[1] + (floating * BASE) * a[2])
+    local first = math.floor(a[1] / b[1] + (BASE / b[1]) * a[2])
+
+    if a[2] >= b[1] then
+        first = two_digit_division({a[1], a[2] - second * b[1]}, b)[1]
+    end
 
     local result_digits = __remove_trailing_zeros({first, second})
     return BigInt.new(result_digits)
 end
 
+-- there is a problem with the long division
 local function long_division(a, b)
     assert(__amount_digits(b) == 1, "Amount of digits of b is greater than 1")
     local quotient_digits = {} 
@@ -415,7 +416,7 @@ local function __mod(a, b)
 end
 
 local function textbook_mul(a, b)
-    local SPLIT_BASE = 2^26
+    local SPLIT_BASE = 2^(POWER / 2)
     local BASE = BigInt.BASE
     local a_digits = a
     local b_digits = b
@@ -700,7 +701,11 @@ local TEST_AMOUNT = 1000
     local result = BigInt(a) / BigInt(b)
 end ]]
 
-BigInt.test_print(BigInt({2310042140305905, 3779025547483650, 2759084521790143, 1333207883151640, 2871280155256532, 2361179593819894}) / BigInt({4380989235077369, 1317378481282125, 3473886240354038}))
+local a = BigInt({2310042140305905, 3779025547483650, 2759084521790143, 1333207883151640, 2871280155256532, 2361179593819894})
+local b = BigInt({4380989235077369, 1317378481282125, 3473886240354038})
+
+BigInt.test_print(a / b)
+--BigInt.test_print( / BigInt({4380989235077369, 1317378481282125, 3473886240354038}))
 
 return BigInt
 
