@@ -302,114 +302,108 @@ local function __lsr(a, b)
     return BigInt.new(digits, __sign(a))
 end
 
-local function two_digit_division(a, b)
-    if __amount_digits(a) == 1 and __amount_digits(b) == 1 then
-        return a / b -- this is a call to __div
+-- A new, correct long division algorithm that replaces the previous non-functional versions.
+local function schoolbook_long_division(a, b)
+    if a < b then
+        return BigInt.new(0), a
     end
 
-    assert(__amount_digits(a) == 2 and __amount_digits(b) == 1, "Invalid input for two digit division")
-
-
-    local second = a[2] / b[1]
-    second = math.floor(second)
-    local first = math.floor(a[1] / b[1] + (BASE / b[1]) * a[2])
-
-    if a[2] >= b[1] then
-        first = two_digit_division({a[1], a[2] - second * b[1]}, b)[1]
+    local remainder = BigInt.new(a)
+    local divisor = b
+    local quotient_digits = {}
+    
+    local shift = __amount_digits(remainder) - __amount_digits(divisor)
+    
+    local shifted_divisor = BigInt.new(pad(divisor, shift))
+    if shifted_divisor > remainder then
+        shift = shift - 1
+        shifted_divisor = BigInt.new(pad(divisor, shift))
     end
+    
+    while shift >= 0 do
+        local q_hat = 0
+        if remainder >= shifted_divisor then
+            -- Bisection search for the single quotient digit `q_hat`. This is robust and avoids overflow.
+            local low = 0
+            local high = BASE - 1
+            local q_guess = 0
+            
+            while low <= high do
+                local mid = low + math.floor((high - low) / 2)
+                
+                local skip = false
 
-    local result_digits = __remove_trailing_zeros({first, second})
-    return BigInt.new(result_digits)
-end
+                if mid == 0 then
+                    low = mid + 1
+                    skip = true
+                end
 
-local function long_division(a, b)
-    assert(__amount_digits(b) == 1, "Amount of digits of b is greater than 1")
-    local quotient_digits = {} 
-
-    local index = #a
-    local current_divisor = a[index]
-    local remainder = 0
-
-    if current_divisor < b[1] then
-        current_divisor = a[index - 1]
-        index = index - 1
-        remainder = a[#a]
-    end
-
-    while index >= 1 do
-        current_divisor = BigInt.new(__remove_trailing_zeros({a[index], remainder}))
-        local result = two_digit_division(current_divisor, b)
-        table.insert(quotient_digits, result[1])
-        remainder = (current_divisor - b * result)[1]
-
-        index = index - 1
-    end
-
-    local correct_format = invert(quotient_digits)
-
-    local quotient = BigInt.new(correct_format)
-    local total_remainder = a - b * quotient
-
-    return quotient, total_remainder
-end
-
-local function bisection_division(a, b)
-    local left = BigInt.new(0)
-    local right = __abs(a)
-
-    while __abs(right - left) > BigInt.new(1) do
-        local middle = __lsl(right - left, BigInt.new(1)) + left
-        local result = (middle * __abs(b)) - __abs(a)
-
-        if result <= BigInt.new(0) then
-            left = middle
+                if not skip then
+                    local product = shifted_divisor * BigInt.new(mid)
+                    
+                    if product <= remainder then
+                        q_guess = mid
+                        low = mid + 1
+                    else
+                        high = mid - 1
+                    end
+                end
+                
+            end
+            
+            q_hat = q_guess
+            if q_hat > 0 then
+                remainder = remainder - (shifted_divisor * BigInt.new(q_hat))
+            end
         end
+        
+        table.insert(quotient_digits, q_hat)
 
-        if result >= BigInt.new(0) then
-            right = middle
-        end
-
-        if result == BigInt.new(0) then
-            break
+        shift = shift - 1
+        if shift >= 0 then
+            -- This is equivalent to a logical right shift of the BigInt's digits.
+            local digits = {unpack(shifted_divisor)}
+            table.remove(digits, 1)
+            shifted_divisor = BigInt.new(digits)
         end
     end
+    
+    -- The calculated digits are in most-significant-first order, so we invert them for the BigInt constructor.
+    local final_quotient_digits = invert(quotient_digits)
 
-    if right * __abs(b) == __abs(a) then
-        return right, 0
-    end
-
-    return left, __abs(a) - left * __abs(b)
+    return BigInt.new(__remove_trailing_zeros(final_quotient_digits)), remainder
 end
 
-local function goldschmidt_division(a, b)
-    -- result changes when doing the goldschmidt division
-    --[[ while __amount_digits(b) > 1 do
-        b = __lsl(b, BigInt.new(1))
-        a = __lsl(a, BigInt.new(1))
-    end ]]
-
-    local q, r = bisection_division(a, b)
-    return q, r
-end
 
 local function __div(a, b)
-
     assert(b ~= BigInt.new(0), "Division by 0")
     local sign = __sign(a) * __sign(b)
 
-    if __amount_digits(a) == 1 and __amount_digits(b) == 1 then
-        local result = math.floor(a[1] / b[1])
-        return BigInt.new(result), BigInt.new(a[1] - math.floor(a[1] / b[1]) * b[1])
+    local abs_a = __abs(a)
+    local abs_b = __abs(b)
+
+    -- Handle single-digit case for performance
+    if __amount_digits(abs_a) == 1 and __amount_digits(abs_b) == 1 then
+        local a_val = abs_a[1]
+        local b_val = abs_b[1]
+        local result = math.floor(a_val / b_val)
+        local remainder = a_val % b_val
+        return BigInt.new(result) * BigInt.new(sign), BigInt.new(remainder)
     end
 
-    local q, r = goldschmidt_division(a, b)
+    local q, r = schoolbook_long_division(abs_a, abs_b)
 
-    return BigInt.new((sign == 1 and q) or -q), r
+    return q * BigInt.new(sign), r
 end
 
 local function __mod(a, b)
-    local _, result = __div(a, b)
-    return result
+    local _, modulo = __div(a, b)
+
+    if __sign(a) == -1 then
+        modulo = __abs(b) - modulo
+    end
+
+    return modulo
 end
 
 local function textbook_mul(a, b)
@@ -568,26 +562,50 @@ local function __mul(a, b)
     return textbook_mul(a, b)
 end
 
--- put the digits in a table and then concat
+-- These constants are for the new, performant __tostring function.
+local TOSTRING_DIVISOR_DIGITS = math.floor(math.log10(BASE))
+local TOSTRING_DIVISOR = nil -- This will be initialized after BigInt.new is available.
+local PADDING_FORMAT = "%0" .. TOSTRING_DIVISOR_DIGITS .. ".f"
+
 local function __tostring(x)
-    if __amount_digits(x) == 1 then
-        return string.format("%.f", x[1])
-    end
-    local sign = __sign(x)
-
-    local text = ""
-    local remainder = BigInt.new(0)
-    while x ~= BigInt.new(0) do
-        x, remainder = __div(x, BigInt.new(10^math.floor(math.log10(BASE))))
-        text = tostring(remainder) .. text
+    if not TOSTRING_DIVISOR then
+        -- Lazy initialization to avoid circular dependency issues.
+        TOSTRING_DIVISOR = BigInt.new(10^TOSTRING_DIVISOR_DIGITS)
     end
 
-    if sign == -1 then
-        text = "-" .. text
+    if __eq(x, BigInt.new(0)) then
+        return "0"
     end
 
-    return text
+    -- Optimization: for numbers smaller than our chunk size, convert directly.
+    if __lt(__abs(x), TOSTRING_DIVISOR) then
+        -- The last digit contains the sign, so this handles negative numbers correctly.
+        return string.format("%.f", x[#x])
+    end
+
+    local work_val = __abs(x)
+    local sign = (__sign(x) == -1) and "-" or ""
+
+    local parts = {}
+    while __lt(BigInt.new(0), work_val) do
+        local quotient, remainder = __div(work_val, TOSTRING_DIVISOR)
+        
+        -- The remainder is guaranteed to be smaller than TOSTRING_DIVISOR,
+        -- so it will fit into a single BigInt digit, which we can extract.
+        local remainder_val = remainder[1] or 0
+        table.insert(parts, 1, string.format(PADDING_FORMAT, remainder_val))
+        
+        work_val = quotient
+    end
+
+    -- The first part may have leading zeros that need to be removed.
+    -- e.g., for 12345 with a divisor of 1000, the parts are {"012", "345"}.
+    -- We need to change "012" to "12".
+    parts[1] = parts[1]:gsub("^0+", "")
+
+    return sign .. table.concat(parts, "")
 end
+
 
 local function __unm(x)
     local clone = {unpack(x)}
@@ -659,7 +677,7 @@ BigInt_metatable.__sub = typecheck(__sub)
 BigInt_metatable.__mod = typecheck(__mod)
 BigInt_metatable.__div = typecheck(__div)
 BigInt_metatable.__mul = typecheck(__mul)
-BigInt_metatable.__tostring = typecheck(__tostring)
+BigInt_metatable.__tostring = __tostring
 BigInt_metatable.__unm = typecheck(__unm)
 BigInt_metatable.__lt = typecheck(__lt)
 BigInt_metatable.__eq = __eq
@@ -675,39 +693,4 @@ local call_proxy = {
 
 setmetatable(BigInt, call_proxy)
 
-local function get_random_number(digits_amount)
-    local x = {}
-    for i = 1, digits_amount do
-        table.insert(x, math.random(1, BASE - 1))
-    end
-    return x
-end
-
-local TEST_AMOUNT = 1000
-
---[[ for i = 1, TEST_AMOUNT do
-    local a = get_random_number(math.random(5, 10))
-    local b = get_random_number(math.random(1, 5))
-
-    print("A")
-    BigInt.test_print(a)
-    print("B")
-    BigInt.test_print(b)
-
-    
-    local result = BigInt(a) / BigInt(b)
-end ]]
-
-local a = BigInt({2310042140305905, 3779025547483650, 2759084521790143, 1333207883151640, 2871280155256532, 2361179593819894})
-local b = BigInt({4380989235077369, 1317378481282125, 3473886240354038})
-local result = BigInt({664333360460500, 3982308273631934, 3061069592710197})
-
--- UNCOMMMENT HERE
---BigInt.test_print(a / b)
-
---BigInt.test_print( / BigInt({4380989235077369, 1317378481282125, 3473886240354038}))
-
 return BigInt
-
--- 2310042140305905, 3779025547483650, 2759084521790143, 1333207883151640, 2871280155256532, 2361179593819894
--- 4380989235077369, 1317378481282125, 3473886240354038

@@ -1,7 +1,7 @@
 --!nocheck
 --!nolint
 
-local BigInt = require("./BigInt")
+local BigInt = require("./BigInt_correctt")
 require 'busted.runner'()
 
 local BASE = BigInt.BASE
@@ -175,15 +175,21 @@ describe("Operations", function()
         end
 
         assert.are.same("354224848179261915075", tostring(fibonacci(100)))
+
+        local function factorial(x)
+            x = BigInt(x)
+            local result = BigInt(1)
+            while true do
+                if x <= BigInt(1) then
+                    return result
+                end
+                result = result * x
+                x = x - BigInt(1)
+            end
+        end
+
+        assert.are.same("93326215443944152681699238856266700490715968264381621468592963895217599993229915608941463976156518286253697920827223758251185210916864000000000000000000000000", tostring(factorial(100)))
     end)
-
-    -- "less or equal" gets inferred from "not greater"
-
-    -- no index
-
-    -- no new_index
-
-    -- no call
 end)
 
 local function get_random_number(digits_amount)
@@ -194,11 +200,44 @@ local function get_random_number(digits_amount)
     return x
 end
 
-local TEST_AMOUNT = 1000
+-- These tests are designed to stress the BigInt library with a high volume of operations on large, random numbers.
+-- They do not check for correctness, but rather ensure that the operations complete without crashing.
+describe("Performance", function()
+    local TEST_AMOUNT = 2000
 
-for i = 1, TEST_AMOUNT do
-    local a = get_random_number(math.random(5, 10))
-    local b = get_random_number(math.random(1, 5))
+    test("Addition performance", function()
+        for i = 1, TEST_AMOUNT do
+            local a = BigInt(get_random_number(math.random(5, 10)))
+            local b = BigInt(get_random_number(math.random(5, 10)))
+            local result = a + b
+            assert.is_not_nil(result)
+        end
+    end)
 
-    local result = BigInt(a) / BigInt(b)
-end
+    test("Subtraction performance", function()
+        for i = 1, TEST_AMOUNT do
+            local a = BigInt(get_random_number(math.random(5, 10)))
+            local b = BigInt(get_random_number(math.random(5, 10)))
+            local result = a - b
+            assert.is_not_nil(result)
+        end
+    end)
+
+    test("Multiplication performance", function()
+        for i = 1, TEST_AMOUNT do
+            local a = BigInt(get_random_number(math.random(5, 10)))
+            local b = BigInt(get_random_number(math.random(1, 5)))
+            local result = a * b
+            assert.is_not_nil(result)
+        end
+    end)
+
+    test("Division performance", function()
+        for i = 1, TEST_AMOUNT do
+            local a = BigInt(get_random_number(math.random(5, 10)))
+            local b = BigInt(get_random_number(math.random(1, 5)))
+            local result = a / b
+            assert.is_not_nil(result)
+        end
+    end)
+end)
