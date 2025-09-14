@@ -1,32 +1,30 @@
--- use enums to make everything more clear when refactoring
-
---[[ local enum = function(keys)
-    local Enum = {}
-    for _, value in ipairs(keys) do
-        Enum[value] = {} 
-    end
-    return Enum
-end ]]
-
-local BigInt = {}
-local BigInt_metatable = {}
-BigInt.__index = BigInt
+local APInt = {}
+local APInt_metatable = {}
+APInt.__index = APInt
 local POWER = 52
 local BASE = 2^POWER -- MAX 2^53
-BigInt.BASE = BASE
-BigInt.MODE = "STRICT"
+APInt.BASE = BASE
+APInt.MODE = "NOT-STRICT"
 local PRELOADED = {}
 
+local supported_versions = {
+    "Lua 5.2",
+    "Luau"
+}
+
+local supported = false
+for _, version in pairs(supported_versions) do
+    if version == _VERSION then
+        supported = true
+        break
+    end
+end
+
+if not supported then
+    warn("You are using an unsupported version of lua for this library, if its 5.2+ it should still work")
+end
 
 assert(POWER % 2 == 0, "POWER must be an even number for multiplication to work properly")
-
-local function slice(array, i, j)
-    local result = {}
-    for i = i, j do
-        table.insert(result, array[i])
-    end
-    return result
-end
 
 local function invert(array)
     local new = {}
@@ -38,28 +36,27 @@ local function invert(array)
     return new
 end
 
-
 local function pad(array, amount)
+    if amount <= 0 then return array end
     local result = {}
     for i = 1, amount do
         table.insert(result, 0)
     end
 
-    for i, v in pairs(array) do
-        table.insert(result, v)
+    for i = 1, #array do
+        table.insert(result, array[i])
     end
 
     return result
 end
 
--- make it so the sign is stored in the last digit so its O(1)
 local function __sign(x)
     return (x[#x] >= 0 and 1) or -1
 end
 
-function BigInt.format(x)
+function APInt.format(x)
     local is_number = type(x) == "number"
-    local is_big_int = type(x) == "table" and BigInt.__is_big_int(x)
+    local is_big_int = type(x) == "table" and APInt.__is_big_int(x)
 
     if is_number then
         return string.format("%.f", x)
@@ -76,22 +73,22 @@ function BigInt.format(x)
     return text
 end
 
-function BigInt.test_print(x)
-    print("{".. BigInt.format(x).. "}")
+function APInt.table_print(x)
+    print("{".. APInt.format(x).. "}")
 end
 
 local function typecheck(f)
     return function(...)
         local arguments = {...}
         for i, v in pairs(arguments) do
-            if not BigInt.__is_big_int(v) then
-                if BigInt.MODE == "STRICT" then
-                    error("Argument for operation was not BIGINT")
+            if not APInt.__is_big_int(v) then
+                if APInt.MODE == "STRICT" then
+                    error("Argument for operation was not APInt")
                 else
-                    if BigInt.MODE == "WARNING" then
-                        print("Argument for operation was not a BIGINT, converted")
+                    if APInt.MODE == "WARNING" then
+                        print("Argument for operation was not a APInt, converted")
                     end
-                    arguments[i] = BigInt.new(v)
+                    arguments[i] = APInt.new(v)
                 end
             end
         end
@@ -99,8 +96,8 @@ local function typecheck(f)
     end
 end
 
-function BigInt.__is_big_int(x)
-    return type(x) == "table" and getmetatable(x) == BigInt_metatable
+function APInt.__is_big_int(x)
+    return type(x) == "table" and getmetatable(x) == APInt_metatable
 end
 
 local function __amount_digits(x)
@@ -110,11 +107,11 @@ end
 local function __abs(x)
     local clone = {unpack(x)}
     if x[#x] == 0 then
-        return BigInt.new(0)
+        return APInt.new(0)
     end
     clone[#clone] = math.abs(clone[#clone])
 
-    return BigInt.new(clone)
+    return APInt.new(clone)
 end
 
 local function __add(a, b)
@@ -143,7 +140,7 @@ local function __add(a, b)
         table.insert(digits, carry)
     end
 
-    return BigInt.new(digits, __sign(a))
+    return APInt.new(digits, __sign(a))
 end
 
 local function __max(a, b)
@@ -151,7 +148,11 @@ local function __max(a, b)
 end
 
 local function __min(a, b)
-    return ((a < b) and a) or b
+    if APInt.__is_big_int(a) then
+        return (a < b and a) or b
+    else
+        return (a < b and a) or b
+    end
 end
 
 local function __remove_trailing_zeros(digits)
@@ -195,7 +196,7 @@ local function __sub(a, b)
         i = i + 1
     end
 
-    local result = BigInt.new(__remove_trailing_zeros(digits))
+    local result = APInt.new(__remove_trailing_zeros(digits))
     return ((__abs(a) > __abs(b)) and result) or -result
 end
 
@@ -221,9 +222,11 @@ local function __lt(a, b)
     if __sign(a) ~= __sign(b) then
         return __sign(a) == -1
     end
+    
+    local sign = __sign(a) -- Both have the same sign
 
     if __amount_digits(a) ~= __amount_digits(b) then
-        return __amount_digits(a) < __amount_digits(b)
+        return (__amount_digits(a) < __amount_digits(b) and sign == 1) or (__amount_digits(a) > __amount_digits(b) and sign == -1)
     end
 
     if __eq(a, b) then
@@ -232,26 +235,22 @@ local function __lt(a, b)
 
     for i = __amount_digits(a), 1, -1 do
         if a[i] ~= b[i] then
-            if not (a[i] < b[i]) then
-                return false
-            else
-                break
-            end
+            return (a[i] < b[i] and sign == 1) or (a[i] > b[i] and sign == -1)
         end
     end
 
-    return true
+    return false
 end
 
 local function __lsl(a, b)
-    if b ~= BigInt.new(1) then
+    if b ~= APInt.new(1) then
         local result = a
-        local i = BigInt.new(1)
+        local i = APInt.new(1)
         while i <= b do
-            result = __lsl(result, BigInt.new(1))
-            i = i + BigInt.new(1)
+            result = __lsl(result, APInt.new(1))
+            i = i + APInt.new(1)
         end
-        return result * BigInt.new(__sign(a)) * BigInt.new(__sign(b))
+        return result * APInt.new(__sign(a)) * APInt.new(__sign(b))
     end
 
     local digits = {}
@@ -266,18 +265,18 @@ local function __lsl(a, b)
         digits[i] = result
     end
 
-    return BigInt.new(__remove_trailing_zeros(digits)) * BigInt.new(__sign(a)) * BigInt.new(__sign(b))
+    return APInt.new(__remove_trailing_zeros(digits)) * APInt.new(__sign(a)) * APInt.new(__sign(b))
 end
 
 local function __lsr(a, b)
-    b = ((b == nil) and BigInt.new(1)) or b
+    b = ((b == nil) and APInt.new(1)) or b
 
-    if b ~= BigInt.new(1) then
+    if b ~= APInt.new(1) then
         local result = a
-        local i = BigInt.new(1)
+        local i = APInt.new(1)
         while i <= b do
-            result = __lsr(result, BigInt.new(1))
-            i = i + BigInt.new(1)
+            result = __lsr(result, APInt.new(1))
+            i = i + APInt.new(1)
         end
         return result
     end
@@ -299,61 +298,59 @@ local function __lsr(a, b)
         table.insert(digits, carry)
     end
 
-    return BigInt.new(digits, __sign(a))
+    return APInt.new(digits, __sign(a))
 end
 
--- A new, correct long division algorithm that replaces the previous non-functional versions.
-local function schoolbook_long_division(a, b)
+local function fast_long_division(a, b)
     if a < b then
-        return BigInt.new(0), a
+        return APInt.new(0), a
     end
 
-    local remainder = BigInt.new(a)
+    local remainder = APInt.new(a)
     local divisor = b
     local quotient_digits = {}
     
     local shift = __amount_digits(remainder) - __amount_digits(divisor)
-    
-    local shifted_divisor = BigInt.new(pad(divisor, shift))
+
+    local shifted_divisor = APInt.new(pad(divisor, shift))
     if shifted_divisor > remainder then
         shift = shift - 1
-        shifted_divisor = BigInt.new(pad(divisor, shift))
+        shifted_divisor = APInt.new(pad(divisor, shift))
     end
-    
+
     while shift >= 0 do
         local q_hat = 0
         if remainder >= shifted_divisor then
-            -- Bisection search for the single quotient digit `q_hat`. This is robust and avoids overflow.
-            local low = 0
-            local high = BASE - 1
-            local q_guess = 0
-            
-            while low <= high do
-                local mid = low + math.floor((high - low) / 2)
-                
-                local skip = false
+            -- Estimate q_hat using Knuth's method
+            -- https://skanthak.hier-im-netz.de/division.html
+            local rem_len = __amount_digits(remainder)
+            local b_len = __amount_digits(divisor)
 
-                if mid == 0 then
-                    low = mid + 1
-                    skip = true
-                end
-
-                if not skip then
-                    local product = shifted_divisor * BigInt.new(mid)
-                    
-                    if product <= remainder then
-                        q_guess = mid
-                        low = mid + 1
-                    else
-                        high = mid - 1
-                    end
-                end
-                
+            local rem_top_val
+            if rem_len > shift + b_len then
+                rem_top_val = remainder[rem_len] * BASE + (remainder[rem_len - 1] or 0)
+            else
+                rem_top_val = remainder[rem_len] or 0
             end
             
-            q_hat = q_guess
+            local div_top_val = divisor[b_len]
+            
+            local q_est = 0
+            if div_top_val ~= 0 then
+                q_est = math.floor(rem_top_val / div_top_val)
+            end
+            
+            q_hat = __min(q_est, BASE - 1)
+
+            -- Correction step. The estimate can be off by 1 or 2.
+            local product = shifted_divisor * APInt.new(q_hat)
+            while product > remainder do
+                q_hat = q_hat - 1
+                product = shifted_divisor * APInt.new(q_hat)
+            end
+            
             if q_hat > 0 then
-                remainder = remainder - (shifted_divisor * BigInt.new(q_hat))
+                remainder = remainder - product
             end
         end
         
@@ -361,45 +358,33 @@ local function schoolbook_long_division(a, b)
 
         shift = shift - 1
         if shift >= 0 then
-            -- This is equivalent to a logical right shift of the BigInt's digits.
             local digits = {unpack(shifted_divisor)}
             table.remove(digits, 1)
-            shifted_divisor = BigInt.new(digits)
+            shifted_divisor = APInt.new(digits)
         end
     end
     
-    -- The calculated digits are in most-significant-first order, so we invert them for the BigInt constructor.
     local final_quotient_digits = invert(quotient_digits)
-
-    return BigInt.new(__remove_trailing_zeros(final_quotient_digits)), remainder
+    return APInt.new(__remove_trailing_zeros(final_quotient_digits)), remainder
 end
 
 
 local function __div(a, b)
-    assert(b ~= BigInt.new(0), "Division by 0")
+    assert(b ~= APInt.new(0), "Division by 0")
     local sign = __sign(a) * __sign(b)
 
     local abs_a = __abs(a)
     local abs_b = __abs(b)
 
-    -- Handle single-digit case for performance
-    if __amount_digits(abs_a) == 1 and __amount_digits(abs_b) == 1 then
-        local a_val = abs_a[1]
-        local b_val = abs_b[1]
-        local result = math.floor(a_val / b_val)
-        local remainder = a_val % b_val
-        return BigInt.new(result) * BigInt.new(sign), BigInt.new(remainder)
-    end
+    local q, r = fast_long_division(abs_a, abs_b)
 
-    local q, r = schoolbook_long_division(abs_a, abs_b)
-
-    return q * BigInt.new(sign), r
+    return q * APInt.new(sign), r
 end
 
 local function __mod(a, b)
     local _, modulo = __div(a, b)
 
-    if __sign(a) == -1 then
+    if __sign(a) == -1 and modulo ~= APInt.new(0) then
         modulo = __abs(b) - modulo
     end
 
@@ -408,7 +393,7 @@ end
 
 local function textbook_mul(a, b)
     local SPLIT_BASE = 2^(POWER / 2)
-    local BASE = BigInt.BASE
+    local BASE = APInt.BASE
     local a_digits = a
     local b_digits = b
     local result = {}
@@ -471,115 +456,41 @@ local function textbook_mul(a, b)
     result = __remove_trailing_zeros(result)
 
     if #result == 0 then
-        return BigInt.new(0)
+        return APInt.new(0)
     end
 
-    return BigInt.new(result)
-end
-
-local KARATSUBA_DIGITS_THRESHOLD = math.huge
-
-local function karatsuba_mul(a, b)
-    local bigger = __max(a, b)
-    local smaller = __min(a, b)
-
-    if __amount_digits(bigger) <= KARATSUBA_DIGITS_THRESHOLD then
-        return textbook_mul(a, b)
-    end
-
-    if __amount_digits(bigger) <= 1 then
-        if bigger[1] <= math.sqrt(BASE) then
-            if bigger[1] == smaller[1] and bigger[1] == math.sqrt(BASE) then
-                return BigInt.new({0, 1})
-            end
-            return BigInt.new(bigger[1] * smaller[1])
-        end
-        a = a[1]
-        b = b[1]
-
-        local m = POWER / 2
-        local B = 2
-
-        local Bm = B^m
-
-        local a0 = a % Bm
-        local a1 = math.floor(a / Bm)
-
-        local b0 = b % Bm
-        local b1 = math.floor(b / Bm)
-
-        local z0 = a0 * b0
-        local z2 = a1 * b1
-        local z3 = BigInt.new(a0 + a1) * BigInt.new(b0 + b1)
-        local z1 = z3 - BigInt.new(z2) - BigInt.new(z0)
-        local result = (BigInt.new(z0) + (z1 * BigInt.new(Bm))) + BigInt.new({0, z2})
-        return BigInt.new(__remove_trailing_zeros(result))
-    end
-
-    local half = math.ceil(__amount_digits(bigger) / 2)
-    local a_digits = bigger
-    local b_digits = smaller
-
-    local a0 = BigInt.new(slice(a_digits, 1, half))
-    local a1 = BigInt.new(slice(a_digits, half + 1, #a_digits))
-    local b0 = BigInt.new(slice(b_digits, 1, math.min(half, #b_digits)))
-
-    local b1_digits = slice(b_digits, math.min(half, #b_digits) + 1, #b_digits)
-    if #b1_digits == 0 then
-        b1_digits = {0}
-    end
-    local b1 = BigInt.new(b1_digits)
-
-    local z0 = a0 * b0
-    local z2 = a1 * b1
-    local z3 = (a0 + a1) * (b0 + b1)
-    local z1 = z3 - z0 - z2
-
-    local z0_digits = z0
-    local z1_digits = pad(z1, half)
-    local z2_digits = pad(z2, half)
-
-    z0 = BigInt.new(z0_digits)
-    z1 = BigInt.new(z1_digits)
-    z2 = BigInt.new(z2_digits)
-
-    return BigInt.new(__remove_trailing_zeros((z0 + z1 + z2)))
+    return APInt.new(result)
 end
 
 local function __mul(a, b)
-    if __sign(a) ~= __sign(b) then
-        return -(__mul(__abs(a), __abs(b)))
+    if a == APInt.new(0) or b == APInt.new(0) then
+        return APInt.new(0)
     end
 
-    if a == BigInt.new(0) or b == BigInt.new(0) then
-        return BigInt.new(0)
-    end
+    local sign = __sign(a) * __sign(b)
+    local result = textbook_mul(__abs(a), __abs(b))
 
-    if (__amount_digits(a) > KARATSUBA_DIGITS_THRESHOLD) or (__amount_digits(b) > KARATSUBA_DIGITS_THRESHOLD) then
-        return karatsuba_mul(a, b)
+    if sign == -1 then
+        return -result
+    else
+        return result
     end
-
-    return textbook_mul(a, b)
 end
 
--- These constants are for the new, performant __tostring function.
 local TOSTRING_DIVISOR_DIGITS = math.floor(math.log10(BASE))
-local TOSTRING_DIVISOR = nil -- This will be initialized after BigInt.new is available.
+local TOSTRING_DIVISOR = nil -- This will be initialized after APInt.new is available.
 local PADDING_FORMAT = "%0" .. TOSTRING_DIVISOR_DIGITS .. ".f"
 
 local function __tostring(x)
     if not TOSTRING_DIVISOR then
-        -- Lazy initialization to avoid circular dependency issues.
-        TOSTRING_DIVISOR = BigInt.new(10^TOSTRING_DIVISOR_DIGITS)
+        TOSTRING_DIVISOR = APInt.new(10^TOSTRING_DIVISOR_DIGITS)
     end
 
-    if __eq(x, BigInt.new(0)) then
+    if __eq(x, APInt.new(0)) then
         return "0"
     end
 
-    -- Optimization: for numbers smaller than our chunk size, convert directly.
     if __lt(__abs(x), TOSTRING_DIVISOR) then
-        -- The last digit contains the sign, so this handles negative numbers correctly.
         return string.format("%.f", x[#x])
     end
 
@@ -587,62 +498,108 @@ local function __tostring(x)
     local sign = (__sign(x) == -1) and "-" or ""
 
     local parts = {}
-    while __lt(BigInt.new(0), work_val) do
+    while __lt(APInt.new(0), work_val) do
         local quotient, remainder = __div(work_val, TOSTRING_DIVISOR)
-        
-        -- The remainder is guaranteed to be smaller than TOSTRING_DIVISOR,
-        -- so it will fit into a single BigInt digit, which we can extract.
+
         local remainder_val = remainder[1] or 0
         table.insert(parts, 1, string.format(PADDING_FORMAT, remainder_val))
         
         work_val = quotient
     end
 
-    -- The first part may have leading zeros that need to be removed.
-    -- e.g., for 12345 with a divisor of 1000, the parts are {"012", "345"}.
-    -- We need to change "012" to "12".
     parts[1] = parts[1]:gsub("^0+", "")
 
     return sign .. table.concat(parts, "")
 end
 
+function APInt.from_string(s)
+    assert(type(s) == "string", "Argument to from_string must be a string")
+
+    local sign = 1
+    if s:sub(1, 1) == "-" then
+        sign = -1
+        s = s:sub(2)
+    end
+
+    assert(s:match("^[0-9]+$"), "Invalid number string format")
+    
+    if not TOSTRING_DIVISOR then
+        TOSTRING_DIVISOR = APInt.new(10^TOSTRING_DIVISOR_DIGITS)
+    end
+
+    local result = APInt.new(0)
+    local current_pos = 1
+    local len = #s
+
+    local first_chunk_len = len % TOSTRING_DIVISOR_DIGITS
+    if first_chunk_len == 0 and len > 0 then
+        first_chunk_len = TOSTRING_DIVISOR_DIGITS
+    end
+
+    if first_chunk_len > 0 then
+        local first_chunk_str = s:sub(current_pos, current_pos + first_chunk_len - 1)
+        result = APInt.new(tonumber(first_chunk_str))
+        current_pos = current_pos + first_chunk_len
+    end
+
+    while current_pos <= len do
+        local chunk_str = s:sub(current_pos, current_pos + TOSTRING_DIVISOR_DIGITS - 1)
+        result = result * TOSTRING_DIVISOR + APInt.new(tonumber(chunk_str))
+        current_pos = current_pos + TOSTRING_DIVISOR_DIGITS
+    end
+
+    if sign == -1 then
+        return -result
+    else
+        return result
+    end
+end
 
 local function __unm(x)
     local clone = {unpack(x)}
     if x[#x] == 0 then
-        return BigInt.new(0)
+        return APInt.new(0)
     end
 
     clone[#clone] = clone[#clone] * -1
 
-    return BigInt.new(clone)
+    return APInt.new(clone)
 end
 
--- lazy
+-- lazy, could implement a fast exponentiation algorithm
 local function __pow(a, b)
-    if b < BigInt.new(0) then
-        assert(a ~= BigInt.new(0), "Negative power of 0")
-        return (a == BigInt.new(1) and BigInt.new(1)) or BigInt.new(0)
+    if b < APInt.new(0) then
+        assert(a ~= APInt.new(0), "Negative power of 0")
+        return (a == APInt.new(1) and APInt.new(1)) or APInt.new(0)
     end
 
-    local result = BigInt.new(1)
-    local i = BigInt.new(1)
+    local result = APInt.new(1)
+    local i = APInt.new(1)
     while i <= b do
-        i = i + BigInt.new(1)
+        i = i + APInt.new(1)
         result = result * a
     end
     return result
 end
 
-function BigInt.new(x)
-    if PRELOADED[x] then
-        return PRELOADED[x]
-    end
-    if BigInt.__is_big_int(x) then
+function APInt.new(x, sign)
+    if APInt.__is_big_int(x) then
+        if sign and __sign(x) ~= sign then
+            return -x
+        end
         return x
     end
 
-    assert(type(x) == "number" or type(x) == "table", "Argument of new must be an integer or a BigInt table rappresentation")
+    if type(x) == "string" then
+        assert(sign == nil, "Cannot provide a sign argument when creating from a string")
+        return APInt.from_string(x)
+    end
+
+    if PRELOADED[x] then
+        return PRELOADED[x]
+    end
+
+    assert(type(x) == "number" or type(x) == "table", "Argument of new must be an integer, string, or a APInt table representation")
 
     local digits
 
@@ -653,7 +610,9 @@ function BigInt.new(x)
     end
     if type(x) == "table" then
         local last = x[#x]
-        assert(-BASE < last and last < BASE, "Last element of the digits table needs to be between " .. string.format("%.f", -BASE) .. " and " .. string.format("%.f", BASE))
+        if last then
+             assert(-BASE < last and last < BASE, "Last element of the digits table needs to be between " .. string.format("%.f", -BASE) .. " and " .. string.format("%.f", BASE))
+        end
         for i = 1, #x - 1 do
             local v = x[i]
             assert(0 <= v)
@@ -662,35 +621,39 @@ function BigInt.new(x)
         digits = x
     end
 
+    if sign and digits[#digits] then
+        digits[#digits] = math.abs(digits[#digits]) * sign
+    end
+
     assert(digits ~= nil)
-    return setmetatable(digits, BigInt_metatable) --read_only()
+    return setmetatable(digits, APInt_metatable) --read_only()
 end
 
 -- Preloading some numbers like python does
 for i = -5, 256 do
-    PRELOADED[i] = BigInt.new(i)
+    PRELOADED[i] = APInt.new(i)
 end
 
-BigInt_metatable.__index = BigInt
-BigInt_metatable.__add = typecheck(__add)
-BigInt_metatable.__sub = typecheck(__sub)
-BigInt_metatable.__mod = typecheck(__mod)
-BigInt_metatable.__div = typecheck(__div)
-BigInt_metatable.__mul = typecheck(__mul)
-BigInt_metatable.__tostring = __tostring
-BigInt_metatable.__unm = typecheck(__unm)
-BigInt_metatable.__lt = typecheck(__lt)
-BigInt_metatable.__eq = __eq
-BigInt_metatable.__pow = typecheck(__pow)
-BigInt_metatable.__lsl = typecheck(__lsl)
-BigInt_metatable.__lsr = typecheck(__lsr)
+APInt_metatable.__index = APInt
+APInt_metatable.__add = typecheck(__add)
+APInt_metatable.__sub = typecheck(__sub)
+APInt_metatable.__mod = typecheck(__mod)
+APInt_metatable.__div = typecheck(__div)
+APInt_metatable.__mul = typecheck(__mul)
+APInt_metatable.__tostring = __tostring
+APInt_metatable.__unm = typecheck(__unm)
+APInt_metatable.__lt = typecheck(__lt)
+APInt_metatable.__eq = __eq
+APInt_metatable.__pow = typecheck(__pow)
+APInt_metatable.__lsl = typecheck(__lsl)
+APInt_metatable.__lsr = typecheck(__lsr)
 
 local call_proxy = {
     __call = function(_, x)
-        return BigInt.new(x)
+        return APInt.new(x)
     end
 }
 
-setmetatable(BigInt, call_proxy)
+setmetatable(APInt, call_proxy)
 
-return BigInt
+return APInt
