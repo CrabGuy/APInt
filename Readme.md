@@ -1,6 +1,7 @@
+![APInt Library Logo](./logo.png)
+
 # A PInt 🍺: Arbitrary-Precision Integer library for Lua (and Roblox)
 
-![APInt Library Logo](./logo.png)
 
 **APInt** is an (A)rbitrary (P)recision (Int)eger library for calculating large numbers without losing a bit of precision.
 
@@ -141,7 +142,12 @@ local a = APInt(100)
 local result = a + 50
 ```
 
-### Additional information
+## Additional information
+
+### Implementation
+The numbers are saved as a table (array) of numbers in base 2^52 by default with the last number of the array also storing the sign. Which takes advantage of the lua [float64](https://en.wikipedia.org/wiki/Double-precision_floating-point_format) number type without losing precision. The table has a variable size and every number is immutable. The algorithms used for the operations are the name of the functions in the code for that operation.
+
+### General Info
 
 - The library tries to replicate the ease-of-use and style of how [Python](https://github.com/python/cpython) handles big integers
 - It tries to compete with the [BigNum](https://github.com/RoStrap/Math/blob/master/BigNum.lua) library by the great programmer [Validark](https://github.com/Validark). It has equal or better performance for correct results in roblox studio which I am satisfied with.
