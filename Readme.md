@@ -1,7 +1,17 @@
 # A PInt 🍺: The Arbitrary-Precision Integer Library for Lua (and Roblox)
-| | |
-| :--- | :--- |
-<br><br>**APInt** is an **A**rbitrary **P**recision **Int**eger library, built to calculate large numbers without losing a single bit of precision. 🔢<br><br>This library is engineered to be **effortlessly easy to use**, integrating as seamlessly as possible into your existing Lua projects by **overloading standard arithmetic** metatables. |  ![APInt Library Logo](./logo.png) 
+
+<table>
+<tr>
+<td>
+<strong>APInt</strong> is an <strong>A</strong>rbitrary <strong>P</strong>recision <strong>Int</strong>eger library, built to calculate large numbers without losing a single bit of precision. 🔢
+
+This library is engineered to be <strong>effortlessly easy to use</strong>, integrating as seamlessly as possible into your existing Lua projects by <strong>overloading standard arithmetic</strong> metatables.
+</td>
+<td>
+<img src="./logo.png" alt="APInt Library Logo" />
+</td>
+</tr>
+</table>
 
 ## Features 🌟
 
