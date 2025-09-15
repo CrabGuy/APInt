@@ -24,8 +24,8 @@ All standard arithmetic operators are overloaded:
     *   Equality (`==`)
     *   (Greater than, less than or equal to, etc., also work, inferred from `<` and `==`)
 *   **📜 String Conversion**: `tostring` method also works.
-* **⚙️ Additional Operations**: Implemented for internal use
-    *   **Bitwise-like Shifts**: Perform logical left and right shifts (`__lsl` and `__lsr` are ready, though not aliased to `<<` or `>>` to maintain Lua 5.2 standards).
+* **⚙️ Additional Operations**:
+    *   **Bitwise-like Shifts**: Implemented for internal use (`__lsl` and `__lsr` are available in the source, though not aliased to `<<` or `>>` to maintain Lua 5.2 standards).
     *   **🔧 Flexible Type Handling**: Configure the library to operate in different modes (`STRICT`, `WARNING`, `NOT-STRICT`) to manage operations with mixed `APInt` and standard number types.
 
 ## Getting Started 🚀
