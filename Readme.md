@@ -110,7 +110,7 @@ end
 
 ### String Conversion 🔄
 
-You can `APInt` objects to strings for printing or serialization.
+You can convert `APInt` objects to strings for printing or serialization.
 
 ```lua
 local APInt = require("APInt")
