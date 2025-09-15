@@ -4,7 +4,7 @@
 
 **APInt** is an **A**rbitrary **P**recision **Int**eger library, built to calculate large numbers without losing a single bit of precision. 🔢
 
-This library is engineered to be **effortlessly easy to use**, integrating as seamlessly as possible into your existing Lua projects by **overloading standard arithmetic** metatables.
+This library is engineered to be **effortlessly easy to use**, integrating as seamlessly as possible into existing Lua projects by **overloading standard arithmetic** metatables.
 
 ## Features 🌟
 
