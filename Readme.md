@@ -1,16 +1,17 @@
 ![APInt Library Logo](./logo.png)
 
-# A PInt 🍺: Arbitrary-Precision Integer library for Lua (and Roblox)
+# A PInt 🍺: The Arbitrary-Precision Integer Library for Lua (and Roblox) 🚀
 
+**APInt** is an **A**rbitrary **P**recision **Int**eger library, built to calculate large numbers without losing a single bit of precision. 🔢
 
-**APInt** is an (A)rbitrary (P)recision (Int)eger library for calculating large numbers without losing a bit of precision.
+This library is engineered to be **effortlessly easy to use**, integrating as seamlessly as possible into your existing Lua projects by **overloading standard arithmetic** metatables.
 
-The library is designed to be **easy to use** and tries to integrate as seamlessly as possible into existing Lua projects by **overloading standard arithmetic** metatables.
+## Features 🌟
 
-## Features
+*   **🧠 Arbitrary-Precision Integers**: Create and manipulate integers far larger than Lua's maximum int value.
 
-*   **Arbitrary-Precision Integers**: Create and manipulate integers far larger than Lua's native number type can handle.
-*   **Full Arithmetic Support**: All standard arithmetic operators are overloaded:
+All standard arithmetic operators are overloaded:
+*   **➕ Operations**:
     *   Addition (`+`)
     *   Subtraction (`-`)
     *   Multiplication (`*`)
@@ -18,44 +19,44 @@ The library is designed to be **easy to use** and tries to integrate as seamless
     *   Modulo (`%`)
     *   Exponentiation (`^`)
     *   Unary Minus (`-`)
-*   **Comparison Operators**: Compare large integers with standard operators:
+*   **⚖️ Comparison Operators**:
     *   Less Than (`<`)
     *   Equality (`==`)
-    *   (Greater than, less than or equal to, etc., also work and are inferred from `<` and `==`)
-*   **String Conversion**: Convert large integers to and from strings.
-* **Additional operations** (implemented for internal use in the library but can be used freely)
-    *   **Bitwise-like Shifts**: Perform logical left and right shifts (`__lsl` and `__lsr` are implemented but not aliased to `<<` or `>>` as they are not standard in Lua 5.2).
-    *   **Flexible Type Handling**: The library can be configured to operate in different modes (`STRICT`, `WARNING`, `NOT-STRICT`) to handle operations with mixed `APInt` and standard number types.
+    *   (Greater than, less than or equal to, etc., also work, inferred from `<` and `==`)
+*   **📜 String Conversion**: `tostring` method also works.
+* **⚙️ Additional Operations**: Implemented for internal use
+    *   **Bitwise-like Shifts**: Perform logical left and right shifts (`__lsl` and `__lsr` are ready, though not aliased to `<<` or `>>` to maintain Lua 5.2 standards).
+    *   **🔧 Flexible Type Handling**: Configure the library to operate in different modes (`STRICT`, `WARNING`, `NOT-STRICT`) to manage operations with mixed `APInt` and standard number types.
 
-## Getting Started
+## Getting Started 🚀
 
-To use the library, simply require the `APInt.lua` file in your project.
+To use APInt 🍺, simply `require` the `APInt.lua` file in your project.
 
 ```lua
 local APInt = require("APInt")
 ```
 
-If coming from **roblox**: make the library a module script and require it from either a local or server script.
+If you're on **Roblox**: just make the library a ModuleScript and require it from a Local or Server Script.
 
-### Creating New Large Integers
+### Creating New Large Integers 🔢
 
-You can create a new arbitrary-precision integer from a number, a string, or another `APInt` object.
+You can create new arbitrary-precision integers from a number, a string, or even another `APInt` object (a table of integers between `0` and `BASE`).
 
 ```lua
 -- From a number
 local a = APInt.new(12345)
-local b = APInt(98765) -- You can also call the library object directly
+local b = APInt(98765) -- You can also call the library object directly!
 
--- From a string for very large numbers
+-- From a string for massive numbers
 local very_large_number = APInt.new("123456789012345678901234567890")
 local another_large_one = APInt("987654321098765432109876543210")
 ```
 
-## Usage Snippets
+## Usage Snippets 💡
 
-### Arithmetic Operations
+### Arithmetic Operations 🧮
 
-All the standard arithmetic operators work as you would expect.
+All the standard arithmetic operators work seemlessly as you'd expect.
 
 ```lua
 local APInt = require("APInt")
@@ -89,9 +90,8 @@ local power = APInt(5)^APInt(100)
 print("5^100:", power)
 ```
 
-### Comparisons
+### Comparisons 👀
 
-You can compare `APInt` objects using standard comparison operators.
 
 ```lua
 local APInt = require("APInt")
@@ -108,9 +108,9 @@ if a == a then
 end
 ```
 
-### String Conversion
+### String Conversion 🔄
 
-Easily convert `APInt` objects to strings for printing or serialization.
+You can `APInt` objects to strings for printing or serialization.
 
 ```lua
 local APInt = require("APInt")
@@ -124,13 +124,13 @@ local as_string = tostring(large_number)
 print(as_string)
 ```
 
-### Configuration
+### Configuration 🛠️
 
-You can change the library's mode for handling non-`APInt` types in operations.
+You can tweak the library's mode for handling non-`APInt` types in operations.
 
-*   `"NOT-STRICT"` (default): Automatically converts numbers to `APInt`.
-*   `"WARNING"`: Converts numbers and prints a warning.
-*   `"STRICT"`: Throws an error if an operation involves a non-`APInt` type.
+*   `"NOT-STRICT"` (default): Automatically converts numbers to `APInt`. ✅
+*   `"WARNING"`: Converts numbers but gives you a heads-up with a warning. ⚠️
+*   `"STRICT"`: Throws an error if an operation involves a non-`APInt` type. 🛑
 
 ```lua
 local APInt = require("APInt")
@@ -138,23 +138,55 @@ local APInt = require("APInt")
 APInt.MODE = "STRICT"
 
 local a = APInt(100)
--- This will now throw an error instead of automatically converting 50
+-- This will now throw an error instead of silently converting 50!
 local result = a + 50
 ```
 
-## Additional information
+## Performance Showdown 🏎️💨
 
-### Implementation
-The numbers are saved as a table (array) of numbers in base 2^52 by default with the last number of the array also storing the sign. Which takes advantage of the lua [float64](https://en.wikipedia.org/wiki/Double-precision_floating-point_format) number type without losing precision. The table has a variable size and every number is immutable. The algorithms used for the operations are the name of the functions in the code for that operation.
+### The Competitor
+APInt competes with the [BigNum](https://github.com/RoStrap/Math/blob/master/BigNum.lua) library by the great programmer [Validark](https://github.com/Validark). It has equal or better performance for correct results in Roblox Studio, which I am satisfied with!
 
-### General Info
+### Blazing-Fast Performance 🔥
 
-- The library tries to replicate the ease-of-use and style of how [Python](https://github.com/python/cpython) handles big integers
-- It tries to compete with the [BigNum](https://github.com/RoStrap/Math/blob/master/BigNum.lua) library by the great programmer [Validark](https://github.com/Validark). It has equal or better performance for correct results in roblox studio which I am satisfied with.
-- The algorithms used should be self-explanatory but there are links to relevant resources where I felt it was needed.
-- The library is tested using [Busted](https://github.com/lunarmodules/busted) in the file "test.lua", it runs as a standalone file using lua5.2 (you need to install Busted for it to work).
+The benchmark file is in the repository, so **you can test it** on your own machine! (You'll need the **BigNum** and **APInt** libraries in the same directory).
 
-### TODO
+The results files are also in the repository: **"benchmark_results_computer"** for tests on **my computer™** and **"benchmark_results_studio"** for tests in **Roblox Studio**.
 
-- Should be adding some proper performance benchmarks against the [BigNum](https://github.com/RoStrap/Math/blob/master/BigNum.lua) library.
-- The library was made for use in roblox games but does not take advantage of Roblox's Bit32 library which could improve performance.
+Here are some of the most egregious results:
+
+### 🖥️ Computer Benchmark
+| Operation | BigNum Time | APInt Time | Speedup |
+| :--- | :--- | :--- | :--- |
+| Creation (.new) | 1.003874 | 0.009388 | **~107x** |
+| Division (Large) | 175.193368 | 49.426132 | **~3.5x** |
+| Modulo (Large) | 170.684935 | 48.997882 | **~3.5x** |
+| To String (Large) | 152.764841 | 11.557140 | **~13.2x** |
+
+### 🕹️ Roblox Studio Benchmark
+| Operation | BigNum Time | APInt Time | Speedup |
+| :--- | :--- | :--- | :--- |
+| Creation (.new) | 0.166527 | 0.020295 | **~8.2x** |
+| Division (Large) | 6.890840 | 1.265368 | **~5.4x** |
+| Modulo (Large) | 7.019249 | 1.278361 | **~5.5x** |
+| To String (Large) | 6.511121 | 0.333968 | **~19.5x** |
+
+## More Info ℹ️
+
+### Implementation Details
+The numbers are stored as a table (array) of numbers in base `2^52` by default, with the last number also storing the sign. This structure takes advantage of Lua's [float64](https://en.wikipedia.org/wiki/Double-precision_floating-point_format) number type without sacrificing precision. The table is variable-sized, and every number is immutable. The algorithms used are linked in the source code!
+
+### Testing
+
+The library is unit-tested using [Busted](https://github.com/lunarmodules/busted) in `test.lua`. It runs as a standalone file with Lua 5.2 (with Busted installed).
+
+### Additional info
+
+-   This library aims to replicate the simplicity and elegance of how [Python](https://github.com/python/cpython) handles big integers. 🐍
+- It took about a month of work
+- I implemented [karatsuba's algorithm](https://en.wikipedia.org/wiki/Karatsuba_algorithm) for multiplication ([and divsion](https://www.researchgate.net/publication/2649773_Practical_Integer_Division_with_Karatsuba_Complexity)) but the performance was worse even for big numbers so it got cut in the final release.
+- My favourite beer is Guinness
+
+### Missing Features (Feel free to fork! 🍴)
+
+-   The library was built for Roblox games but doesn't yet leverage Roblox's `Bit32` library, which could be faster.

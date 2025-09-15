@@ -1,0 +1,115 @@
+local config = {
+    num_small_values = 1000,
+    num_large_values = 1000,
+    small_digits_max = 5,
+    large_digits_max = 20,
+}
+
+Preparing numbers for benchmarks...
+--- Starting Benchmarks ---
+
+--- Operation: mul ---
+BigNum:
+        Small vs Small: 4.946340
+        Large vs Large: 7.049574
+        Small vs Large: 6.829469
+APInt:
+        Small vs Small: 3.890105
+        Large vs Large: 4.317455
+        Small vs Large: 4.088987
+
+--- Operation: unm ---
+BigNum:
+        Small vs Small: 1.829636
+        Large vs Large: 1.865873
+        Small vs Large: 1.746778
+APInt:
+        Small vs Small: 1.438485
+        Large vs Large: 1.298994
+        Small vs Large: 1.276985
+
+--- Operation: pow ---
+BigNum:
+        Small vs Small: 0.192776
+        Large vs Large: 0.245578
+        Small vs Large: N/A
+APInt:
+        Small vs Small: 0.110738
+        Large vs Large: 0.126738
+        Small vs Large: N/A
+
+--- Operation: add ---
+BigNum:
+        Small vs Small: 3.100946
+        Large vs Large: 3.123440
+        Small vs Large: 3.057055
+APInt:
+        Small vs Small: 1.671011
+        Large vs Large: 1.703368
+        Small vs Large: 1.644206
+
+--- Operation: lt ---
+BigNum:
+        Small vs Small: 1.094656
+        Large vs Large: 1.093293
+        Small vs Large: 1.10939
+APInt:
+        Small vs Small: 0.852313
+        Large vs Large: 0.895292
+        Small vs Large: 0.956514
+
+--- Operation: tostr ---
+BigNum:
+        Small vs Small: 33.174953
+        Large vs Large: 152.764841
+        Small vs Large: 30.085316
+APInt:
+        Small vs Small: 6.394255
+        Large vs Large: 11.557140
+        Small vs Large: 6.188827
+
+--- Operation: sub ---
+BigNum:
+        Small vs Small: 4.614819
+        Large vs Large: 4.511340
+        Small vs Large: 4.349943
+APInt:
+        Small vs Small: 4.014869
+        Large vs Large: 4.149070
+        Small vs Large: 4.571776
+
+--- Operation: mod ---
+BigNum:
+        Small vs Small: 38.917940
+        Large vs Large: 170.684935
+        Small vs Large: 151.237867
+APInt:
+        Small vs Small: 17.904430
+        Large vs Large: 48.997882
+        Small vs Large: 17.95132
+
+--- Operation: div ---
+BigNum:
+        Small vs Small: 38.635471
+        Large vs Large: 175.193368
+        Small vs Large: 154.806465
+APInt:
+        Small vs Small: 17.391947
+        Large vs Large: 49.426132
+        Small vs Large: 17.59832
+
+--- Operation: eq ---
+BigNum:
+        Small vs Small: 1.018063
+        Large vs Large: 0.932092
+        Small vs Large: 0.97274199999993
+APInt:
+        Small vs Small: 0.236263
+        Large vs Large: 0.200374
+        Small vs Large: 0.21747000000005
+
+--- Operation: .new (Creation) ---
+BigNum: 1.003874
+APInt:  0.009388
+
+--- Benchmarks Finished ---

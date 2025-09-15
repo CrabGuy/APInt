@@ -172,7 +172,7 @@ local function get_random_number(digits_amount)
 end
 
 describe("Performance", function()
-    local TEST_AMOUNT = 2000
+    local TEST_AMOUNT = 5000
 
     test("Addition performance", function()
         for i = 1, TEST_AMOUNT do

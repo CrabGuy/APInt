@@ -1,0 +1,115 @@
+local config = {
+	num_small_values = 250,
+	num_large_values = 250,
+	small_digits_max = 5,
+	large_digits_max = 20,
+}
+
+Preparing numbers for benchmarks...
+  --- Starting Benchmarks ---
+
+  --- Operation: sub ---
+  BigNum:
+	Small vs Small: 0.181230
+	Large vs Large: 0.186716
+	Small vs Large: 0.1851915999995981
+  APInt:
+	Small vs Small: 0.124927
+	Large vs Large: 0.127731
+	Small vs Large: 0.14749719999963418
+  
+  --- Operation: tostr ---
+  BigNum:
+	Small vs Small: 1.356500
+	Large vs Large: 6.511121
+	Small vs Large: 1.2019591000007495
+  APInt:
+	Small vs Small: 0.186080
+	Large vs Large: 0.333968
+	Small vs Large: 0.18584139999984473
+  
+  --- Operation: eq ---
+  BigNum:
+	Small vs Small: 0.039059
+	Large vs Large: 0.040336
+	Small vs Large: 0.04242780000095081
+  APInt:
+	Small vs Small: 0.008638
+	Large vs Large: 0.007135
+	Small vs Large: 0.007363400000031106
+  
+  --- Operation: div ---
+  BigNum:
+	Small vs Small: 1.518897
+	Large vs Large: 6.890840
+	Small vs Large: 5.910946599999079
+  APInt:
+	Small vs Small: 0.499168
+	Large vs Large: 1.265368
+	Small vs Large: 0.5189665999987483
+  
+  --- Operation: mul ---
+  BigNum:
+	Small vs Small: 0.180880
+	Large vs Large: 0.238932
+	Small vs Large: 0.2349950000007084
+  APInt:
+	Small vs Small: 0.088890
+	Large vs Large: 0.099218
+	Small vs Large: 0.10298789999978908
+  
+  --- Operation: unm ---
+  BigNum:
+	Small vs Small: 0.050895
+	Large vs Large: 0.049816
+	Small vs Large: 0.05770940000002156
+  APInt:
+	Small vs Small: 0.026737
+	Large vs Large: 0.028370
+	Small vs Large: 0.030046300000321935
+  
+  --- Operation: pow ---
+  BigNum:
+	Small vs Small: 0.049667
+	Large vs Large: 0.060740
+	Small vs Large: N/A
+  APInt:
+	Small vs Small: 0.018228
+	Large vs Large: 0.025955
+	Small vs Large: N/A
+  
+  --- Operation: lt ---
+  BigNum:
+	Small vs Small: 0.042934
+	Large vs Large: 0.037587
+	Small vs Large: 0.03907010000148148
+  APInt:
+	Small vs Small: 0.020742
+	Large vs Large: 0.021950
+	Small vs Large: 0.021830499999850872
+  
+  --- Operation: mod ---
+  BigNum:
+	Small vs Small: 1.495488
+	Large vs Large: 7.019249
+	Small vs Large: 6.007251499999256
+  APInt:
+	Small vs Small: 0.491256
+	Large vs Large: 1.278361
+	Small vs Large: 0.5295107000001735
+  
+  --- Operation: add ---
+  BigNum:
+	Small vs Small: 0.116745
+	Large vs Large: 0.117561
+	Small vs Large: 0.1218895000001794
+  APInt:
+	Small vs Small: 0.039485
+	Large vs Large: 0.038659
+	Small vs Large: 0.038751600000978215
+  
+  --- Operation: .new (Creation) ---
+  BigNum:	0.166527
+  APInt:	0.020295
+  
+--- Benchmarks Finished ---
