@@ -2,7 +2,7 @@ local APInt = {}
 local APInt_metatable = {}
 APInt.__index = APInt
 local POWER = 52
-local BASE = 2^POWER -- MAX 2^53
+local BASE = 2^POWER -- MAX 2^53 for 1 bit precision
 APInt.BASE = BASE
 APInt.MODE = "NOT-STRICT"
 local PRELOADED = {}
@@ -382,6 +382,7 @@ local function __div(a, b)
 end
 
 local function __mod(a, b)
+    assert(b ~= APInt.new(0), "Modulo by 0")
     local _, modulo = __div(a, b)
 
     if __sign(a) == -1 and modulo ~= APInt.new(0) then
@@ -626,7 +627,7 @@ function APInt.new(x, sign)
     end
 
     assert(digits ~= nil)
-    return setmetatable(digits, APInt_metatable) --read_only()
+    return setmetatable(digits, APInt_metatable) -- should make read only
 end
 
 -- Preloading some numbers like python does

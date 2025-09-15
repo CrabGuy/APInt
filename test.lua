@@ -101,6 +101,7 @@ describe("Operations", function()
         assert.are.same({0, 2}, APInt(2) ^ APInt(53))
         assert.are.same({0}, APInt(10) ^ APInt(-1))
         assert.are.same({1}, APInt(1) ^ APInt(-10))
+        assert.are.same({1}, APInt(4) ^ APInt(0))
     end)
 
     test("Unary minus", function()
