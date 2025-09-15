@@ -184,7 +184,7 @@ The library is unit-tested using [Busted](https://github.com/lunarmodules/busted
 
 -   This library aims to replicate the simplicity and elegance of how [Python](https://github.com/python/cpython) handles big integers. 🐍
 - It took about a month of work
-- I implemented [karatsuba's algorithm](https://en.wikipedia.org/wiki/Karatsuba_algorithm) for multiplication ([and divsion](https://www.researchgate.net/publication/2649773_Practical_Integer_Division_with_Karatsuba_Complexity)) but the performance was worse even for big numbers so it got cut in the final release.
+- I implemented [karatsuba's algorithm](https://en.wikipedia.org/wiki/Karatsuba_algorithm) for multiplication ([and division](https://www.researchgate.net/publication/2649773_Practical_Integer_Division_with_Karatsuba_Complexity)) but the performance was worse even for big numbers so it got cut in the final release.
 - My favourite beer is Guinness
 
 ### Missing Features (Feel free to fork! 🍴)
