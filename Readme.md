@@ -1,4 +1,4 @@
-# A PInt 🍺: The Arbitrary-Precision Integer Library for Lua (and Roblox)
+# A PInt 🍺: Arbitrary-Precision Integer Library for Lua (and Roblox)
 
 <img src="./logo.png" width="256"/>
 
