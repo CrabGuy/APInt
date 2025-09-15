@@ -189,4 +189,4 @@ The library is unit-tested using [Busted](https://github.com/lunarmodules/busted
 
 ### Missing Features (Feel free to fork! 🍴)
 
--   The library was built for Roblox games but doesn't yet leverage Roblox's `Bit32` library, which could be faster.
+-   The library was built for Roblox games but doesn't yet leverage Roblox's `buffer` library, which could be faster.
