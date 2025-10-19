@@ -38,6 +38,9 @@ local APInt = require("APInt")
 
 If you're on **Roblox**: just make the library a ModuleScript and require it from a Local or Server Script.
 
+Or also on [wally (a roblox package manager)](https://wally.run/) thanks to [Vran-n](https://github.com/Vran-n)!
+[[Wally package]](https://wally.run/package/vran-n/apint)
+
 ### Creating New Large Integers 🔢
 
 You can create new arbitrary-precision integers from a number, a string, or even another `APInt` object (a table of integers between `0` and `BASE`).
@@ -182,8 +185,7 @@ The library is unit-tested using [Busted](https://github.com/lunarmodules/busted
 
 ### Additional info
 
--   This library aims to replicate the simplicity and elegance of how [Python](https://github.com/python/cpython) handles big integers. 🐍
-- It took about a month of work
+- This library aims to replicate the simplicity and elegance of how [Python](https://github.com/python/cpython) handles big integers. 🐍
 - I implemented [karatsuba's algorithm](https://en.wikipedia.org/wiki/Karatsuba_algorithm) for multiplication ([and division](https://www.researchgate.net/publication/2649773_Practical_Integer_Division_with_Karatsuba_Complexity)) but the performance was worse even for big numbers so it got cut in the final release.
 - My favourite beer is Guinness
 
