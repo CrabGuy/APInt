@@ -69,6 +69,33 @@ local function __sign(x)
     return (x[#x] >= 0 and 1) or -1
 end
 
+local function splitted_multiplication(a, b)
+    local SPLIT_BASE = 2^(POWER / 2)
+
+    local a_hi = math_floor(a / SPLIT_BASE)
+    local a_lo = a % SPLIT_BASE
+
+    local b_hi = math_floor(b / SPLIT_BASE)
+    local b_lo = b % SPLIT_BASE
+
+    local term1 = a_hi * b_hi
+    local term2 = a_hi * b_lo
+    local term3 = a_lo * b_hi
+    local term4 = a_lo * b_lo
+
+    local term23 = term2 + term3
+    local term23_hi = math_floor(term23 / SPLIT_BASE)
+    local term23_lo = term23 % SPLIT_BASE
+
+    local low = term4 + term23_lo * SPLIT_BASE
+    local carry1 = math_floor(low / BASE)
+    local total_low = low % BASE
+    local total_high = term1 + term23_hi + carry1
+
+    return total_low, total_high
+end
+
+
 function APInt.format(x)
     local is_number = type(x) == "number"
     if is_number then
@@ -98,7 +125,7 @@ local function typecheck(f)
                     error("Argument for operation was not APInt")
                 else
                     if APInt.MODE == "WARNING" then
-                        print("Argument for operation was not a APInt, converted")
+                        warn("Argument for operation was not a APInt, converted")
                     end
                     arguments[i] = APInt.new(v)
                 end
@@ -221,7 +248,6 @@ end
 -- https://en.wikipedia.org/wiki/Multiplication_algorithm
 -- with a small difference in how i calculate the intermediate products to not overflow the base
 local function textbook_mul(a, b)
-    local SPLIT_BASE = 2^(POWER / 2)
     local a_digits, b_digits = a, b
     local a_n, b_n = #a_digits, #b_digits
     local len = a_n + b_n
@@ -234,28 +260,7 @@ local function textbook_mul(a, b)
             local pos = i + j - 1
 
             -- splitting to not overflow
-
-            local a_i = a_digits[i]
-            local a_hi = math_floor(a_i / SPLIT_BASE)
-            local a_lo = a_i % SPLIT_BASE
-
-            local b_j = b_digits[j]
-            local b_hi = math_floor(b_j / SPLIT_BASE)
-            local b_lo = b_j % SPLIT_BASE
-
-            local term1 = a_hi * b_hi
-            local term2 = a_hi * b_lo
-            local term3 = a_lo * b_hi
-            local term4 = a_lo * b_lo
-
-            local term23 = term2 + term3
-            local term23_hi = math_floor(term23 / SPLIT_BASE)
-            local term23_lo = term23 % SPLIT_BASE
-
-            local low = term4 + term23_lo * SPLIT_BASE
-            local carry1 = math_floor(low / BASE)
-            local digit_part = low % BASE
-            local total_carry = term1 + term23_hi + carry1
+            local digit_part, total_carry = splitted_multiplication(a_digits[i], b_digits[j])
 
             local temp = result[pos] + digit_part + carry_row
             carry_row = math_floor(temp / BASE)
@@ -286,75 +291,79 @@ local function __mul(a, b)
     return sign == -1 and -result or result
 end
 
--- a variation of the long division algorithm https://en.wikipedia.org/wiki/Long_division
--- (restoring long division https://www.geeksforgeeks.org/computer-organization-architecture/restoring-division-algorithm-unsigned-integer/)
-local function fast_long_division(a, b)
+-- Knuth’s Algorithm D
+-- https://ridiculousfish.com/blog/posts/labor-of-division-episode-iv.html
+
+-- soluzione bruteforce provvisoria
+
+local function smaller_division(a, b)
+
+    assert(#a == 3 and #b == 2)
+
+    local smaller_b = b[#b]
+
+    assert(smaller_b >= math.ceil(BASE / 2), "Forgot to normalize")
+
+    local high_a = a[#a]
+    local low_a = a[#a - 1]
+
+    local smaller_a = high_a * BASE + low_a
+    local estimate = math.floor(smaller_a / smaller_b) + 1
+
+    for i = 0, 3 do
+
+        local current_quotient_estimate = estimate - i
+        print(current_quotient_estimate)
+
+        local low, high = splitted_multiplication(current_quotient_estimate, smaller_b)
+
+        local remainder_estimation = low_a - low
+
+        if high >= 1 then
+            remainder_estimation = BASE - remainder_estimation
+        end
+
+        if APInt(current_quotient_estimate) * APInt(b) <= APInt(a) then
+            return current_quotient_estimate
+        end
+
+--[[         local check_low, check_high = splitted_multiplication(current_quotient_estimate, b[1])
+
+
+
+        if check_high <= 1 then
+            local reference = check_low - a[1]
+            if check_low < a[1] and check_high == 1 then
+                print("Problems")
+                -- reference = BASE - reference
+            end
+
+            if reference < remainder_estimation then
+                print(reference, remainder_estimation)
+
+                return current_quotient_estimate
+            end
+        end ]]
+    end
+
+    error("Something went wrong with the estimation process")
+end
+
+local function long_division(a, b)
     if a < b then
         return PRELOADED[0], a
     end
 
-    local remainder = a
-    local divisor = b
-    local quotient_digits = {}
     
-    local shift = #remainder - #divisor
-    local shifted_divisor = APInt.new(pad(divisor, shift))
-    if shifted_divisor > remainder then
-        shift = shift - 1
-        shifted_divisor = APInt.new(pad(divisor, shift))
-    end
-    
-    local BASE_MINUS_1 = BASE - 1
 
-    while shift >= 0 do
-        local q_hat = 0
-        if remainder >= shifted_divisor then
-            local rem_len = #remainder
-            local b_len = #divisor
-            local rem_top_val
-            if rem_len > shift + b_len then
-                rem_top_val = remainder[rem_len] * BASE + (remainder[rem_len - 1] or 0)
-            else
-                rem_top_val = remainder[rem_len] or 0
-            end
-            local div_top_val = divisor[b_len]
-            
-            local q_est = 0
-            if div_top_val ~= 0 then
-                q_est = math_floor(rem_top_val / div_top_val)
-            end
-            
-            q_hat = (q_est < BASE_MINUS_1 and q_est) or BASE_MINUS_1
-
-            local product = shifted_divisor * APInt.new(q_hat)
-            while product > remainder do
-                q_hat = q_hat - 1
-                product = product - shifted_divisor
-            end
-            
-            if q_hat > 0 then
-                remainder = remainder - product
-            end
-        end
-        
-        table_insert(quotient_digits, q_hat)
-        shift = shift - 1
-        
-        if shift >= 0 then
-            local digits = {unpack(shifted_divisor)}
-            table_remove(digits, 1)
-            shifted_divisor = APInt.new(digits)
-        end
-    end
-    
-    return APInt.new(__remove_trailing_zeros(invert(quotient_digits))), remainder
+    smaller_division(a, b)
 end
 
 local function __div(a, b)
     assert(b ~= PRELOADED[0], "Division by 0")
     local sign = __sign(a) * __sign(b)
     local abs_a, abs_b = __abs(a), __abs(b)
-    local q, r = fast_long_division(abs_a, abs_b)
+    local q, r = long_division(abs_a, abs_b)
     return q * APInt.new(sign), r
 end
 
@@ -424,7 +433,7 @@ local TOSTRING_DIVISOR = nil
 local PADDING_FORMAT = "%0" .. TOSTRING_DIVISOR_DIGITS .. ".0f"
 
 local function __tostring(x)
-    if not TOSTRING_DIVISOR then
+    if not TOSTRING_DIVISOR then --creating it beforehand gives an error because .new doesnt exist
         TOSTRING_DIVISOR = APInt.new(10^TOSTRING_DIVISOR_DIGITS)
     end
 
@@ -433,14 +442,15 @@ local function __tostring(x)
     local work_val = __abs(x)
     local sign = (__sign(x) == -1) and "-" or ""
     local parts = {}
-    
+
     while work_val > PRELOADED[0] do
         local quotient, remainder = __div(work_val, TOSTRING_DIVISOR)
         local remainder_val = (remainder[1] or 0)
         table_insert(parts, 1, remainder_val)
+        print(remainder_val)
         work_val = quotient
     end
-    
+
     local first = parts[1]
     local str = sign .. first
     for i = 2, #parts do
@@ -549,5 +559,10 @@ local call_proxy = {
     end
 }
 setmetatable(APInt, call_proxy)
+
+print("Division:")
+print(APInt.format(smaller_division({2, 3, 4}, {BASE - 1, BASE - 1})))
+
+--print(APInt.format(APInt(10) / APInt(3)))
 
 return APInt

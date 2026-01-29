@@ -6,6 +6,9 @@ local APInt = require("./APInt")
 
 local BASE = APInt.BASE
 
+assert(BASE == 2^52, "Tests are written to have 2^52 as base")
+assert(false, "TRANSFORMING TOSTRING_DIVISOR INTO A STRING ERRORS")
+
 TestOperations = {}
 
     function TestOperations:testCreatesNewValue()
@@ -103,6 +106,7 @@ TestOperations = {}
         luaunit.assertEquals(APInt(10) ^ APInt(-1), {0})
         luaunit.assertEquals(APInt(1) ^ APInt(-10), {1})
         luaunit.assertEquals(APInt(4) ^ APInt(0), {1})
+        luaunit.assertEquals(APInt(10) ^ APInt(100), APInt("10000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"))
     end
 
     function TestOperations:testUnaryMinus()
