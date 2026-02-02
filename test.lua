@@ -7,7 +7,7 @@ local APInt = require("./APInt")
 local BASE = APInt.BASE
 
 assert(BASE == 2^52, "Tests are written to have 2^52 as base")
-assert(false, "TRANSFORMING TOSTRING_DIVISOR INTO A STRING ERRORS")
+--assert(false, "TRANSFORMING TOSTRING_DIVISOR INTO A STRING ERRORS")
 
 TestOperations = {}
 

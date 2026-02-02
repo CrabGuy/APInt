@@ -65,6 +65,18 @@ local function pad(array, amount)
     return result
 end
 
+local function move(src, start, length, dest)
+    local step = (length >= 0) and 1 or -1
+    local j = 1
+
+    for i = start, start + length, step do
+        dest[j] = src[i]
+        j = j + 1
+    end
+
+    return dest
+end
+
 local function __sign(x)
     return (x[#x] >= 0 and 1) or -1
 end
@@ -294,37 +306,45 @@ end
 -- Knuth’s Algorithm D
 -- https://ridiculousfish.com/blog/posts/labor-of-division-episode-iv.html
 
--- soluzione bruteforce provvisoria
-
+-- temporary bruteforce solution
 local function smaller_division(a, b)
 
-    assert(#a == 3 and #b == 2)
+    assert(0 <= #a - #b and #a - #b <= 1, "Invalid input for small division")
 
     local smaller_b = b[#b]
 
-    assert(smaller_b >= math.ceil(BASE / 2), "Forgot to normalize")
+    assert(smaller_b >= math.ceil(BASE / 2), "Must be normalized")
 
     local high_a = a[#a]
     local low_a = a[#a - 1]
 
     local smaller_a = high_a * BASE + low_a
+
+    -- The estimate uses lua's floored division + 1 so the estimate can be off by at most 3 (instead of 2 like the normal knuth's algorithm)
     local estimate = math.floor(smaller_a / smaller_b) + 1
 
     for i = 0, 3 do
 
         local current_quotient_estimate = estimate - i
-        print(current_quotient_estimate)
 
-        local low, high = splitted_multiplication(current_quotient_estimate, smaller_b)
-
+        
+        --[[ local low, high = splitted_multiplication(current_quotient_estimate, smaller_b)
+        
         local remainder_estimation = low_a - low
-
+        
         if high >= 1 then
             remainder_estimation = BASE - remainder_estimation
-        end
+        end ]]
+        
+        
+        local remainder = APInt(a) - (APInt(current_quotient_estimate) * APInt(b))
+        
+        print("Current estimate:\t", current_quotient_estimate)
 
-        if APInt(current_quotient_estimate) * APInt(b) <= APInt(a) then
-            return current_quotient_estimate
+        if remainder >= 0 then
+            -- remainder is not guaranteed to be smaller than BASE
+            assert(#remainder == 1, "Does not account for multiword remainder")
+            return current_quotient_estimate, remainder[#remainder]
         end
 
 --[[         local check_low, check_high = splitted_multiplication(current_quotient_estimate, b[1])
@@ -349,21 +369,71 @@ local function smaller_division(a, b)
     error("Something went wrong with the estimation process")
 end
 
+
 local function long_division(a, b)
-    if a < b then
-        return PRELOADED[0], a
+    local solution = {}
+
+    local current_partial_remainder = 0
+
+    print("Doing:\t["..APInt.format(a).."]/["..APInt.format(b).."]")
+
+    local  i = #a
+    while i >= #b do
+
+        -- THIS CANNOT POSSIBLY BE CORRECT
+
+        local smaller_a = move(a, i, -(#b - 1), {})
+        smaller_a = invert(smaller_a)
+        table.insert(smaller_a, current_partial_remainder)
+
+        smaller_a = APInt(smaller_a)
+
+        local partial_quotient, partial_remainder = smaller_division(smaller_a, b)
+
+        -- 3330303496976432
+
+        print("-------")
+        print("smaller a", APInt.format(smaller_a))
+        print("b", APInt.format(b))
+        print("partial quotient", APInt.format(partial_quotient))
+        print("partial_remainder", APInt.format(partial_remainder))
+
+        table.insert(solution, partial_quotient)
+
+        current_partial_remainder = partial_remainder
+
+        i = i - 1
     end
 
-    
+    table.remove(solution, #solution)
 
-    smaller_division(a, b)
+    local quotient = APInt(solution)
+    local remainder = current_partial_remainder
+
+    return quotient, remainder
 end
+
+local function division(a, b)
+    local most_significant = b[#b]
+    local multiplier = math.floor(BASE / most_significant)
+    local denormalized_quotient, denormalized_remainder = long_division(a * multiplier, b * multiplier)
+
+    local quotient = denormalized_quotient
+
+    print("denormalized", APInt.format(denormalized_remainder), multiplier)
+
+    -- denormalized_remainder is not a perfect multiple of multiplier
+    local remainder = APInt(denormalized_remainder / multiplier)
+
+    return quotient, remainder
+end
+
 
 local function __div(a, b)
     assert(b ~= PRELOADED[0], "Division by 0")
     local sign = __sign(a) * __sign(b)
     local abs_a, abs_b = __abs(a), __abs(b)
-    local q, r = long_division(abs_a, abs_b)
+    local q, r = division(abs_a, abs_b)
     return q * APInt.new(sign), r
 end
 
@@ -376,7 +446,7 @@ local function __mod(a, b)
     return modulo
 end
 
--- lazy, probably for bigger number a fast exponentiation algorithm could be faster 
+-- lazy, probably for bigger number a fast exponentiation algorithm could be faster
 local function __pow(a, b)
     if b < PRELOADED[0] then
         assert(a ~= PRELOADED[0], "Negative power of 0")
@@ -560,9 +630,15 @@ local call_proxy = {
 }
 setmetatable(APInt, call_proxy)
 
-print("Division:")
-print(APInt.format(smaller_division({2, 3, 4}, {BASE - 1, BASE - 1})))
+--[[ print("Division:")
+print(APInt.format(smaller_division({2, 3, 4}, {BASE - 1, BASE - 1}))) ]]
 
---print(APInt.format(APInt(10) / APInt(3)))
+local a = APInt(238497923847)
+local b = APInt(238477)
+
+local divided = a / b
+local remainder = a % b
+print("Division: " .. APInt.format(divided))
+print("Modulo: " .. APInt.format(remainder))
 
 return APInt
