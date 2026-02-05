@@ -23,11 +23,12 @@ TestOperations = {}
         luaunit.assertEquals(APInt("0"), {0})
         luaunit.assertEquals(APInt(string.format("%.f", BASE)), {0, 1})
         luaunit.assertEquals(APInt("-" .. string.format("%.f", BASE)), {0, -1})
-        
+
         local big_number_str = "93326215443944152681699238856266700490715968264381621468592963895217599993229915608941463976156518286253697920827223758251185210916864000000000000000000000000"
         luaunit.assertEquals(tostring(APInt(big_number_str)), big_number_str)
         luaunit.assertEquals(tostring(APInt("-" .. big_number_str)), "-" .. big_number_str)
 
+        --luaunit.assertError(function() APInt({1, 0}) end)
         luaunit.assertError(function() APInt(BASE) end)
         luaunit.assertError(function() APInt({BASE, BASE}) end)
         luaunit.assertError(function() APInt({1, -2, 3, 4}) end)
@@ -56,7 +57,7 @@ TestOperations = {}
     function TestOperations:testMultiplication()
         luaunit.assertEquals(APInt(2) * APInt(2), {4})
         luaunit.assertEquals(APInt(-2) * APInt(3), {-6})
-        luaunit.assertEquals(APInt(420) * APInt(0), {0})
+        luaunit.assertEquals(APInt(420) * APInt(0), APInt(0))
         luaunit.assertEquals(APInt(math.sqrt(BASE)) * APInt(math.sqrt(BASE)), {0, 1})
         luaunit.assertEquals(APInt(-math.sqrt(BASE)) * APInt(math.sqrt(BASE)), {0, -1})
 
@@ -78,11 +79,13 @@ TestOperations = {}
 
     function TestOperations:testDivision()
         luaunit.assertEquals(APInt(4) / APInt(2), {2})
+        luaunit.assertEquals(APInt(4) / APInt(1), {4})
         luaunit.assertEquals(APInt(-6) / APInt(2), {-3})
         luaunit.assertEquals(APInt(7) / APInt(3), {2})
         luaunit.assertEquals(APInt(-12) / APInt(-5), {2})
         luaunit.assertEquals(APInt(0) / APInt(420), {0})
         luaunit.assertEquals(APInt({0, 1}) / APInt(math.sqrt(BASE)), APInt(math.sqrt(BASE)))
+        luaunit.assertEquals(APInt(238497923847) / APInt(238477), APInt(1000087))
         
         local huge_num_1 = APInt({2310042140305905, 3779025547483650, 2759084521790143, 1333207883151640, 2871280155256532, 2361179593819894})
         local huge_num_2 = APInt({4380989235077369, 1317378481282125, 3473886240354038})
@@ -98,10 +101,11 @@ TestOperations = {}
         luaunit.assertEquals(APInt(-1) % APInt(10), {9})
         luaunit.assertEquals(APInt({0, 1}) % APInt(10), {6})
         luaunit.assertEquals(APInt({2107998818533376, 11344}) % APInt(100000), {40000})
+        luaunit.assertEquals(APInt(238497923847) % APInt(238477), APInt(176348))
     end
 
     function TestOperations:testPower()
-        luaunit.assertEquals(APInt(2) ^ APInt(4), {16})
+        luaunit.assertEquals(APInt(2) ^ APInt(4), APInt(16))
         luaunit.assertEquals(APInt(2) ^ APInt(53), {0, 2})
         luaunit.assertEquals(APInt(10) ^ APInt(-1), {0})
         luaunit.assertEquals(APInt(1) ^ APInt(-10), {1})
@@ -112,7 +116,7 @@ TestOperations = {}
     function TestOperations:testUnaryMinus()
         luaunit.assertEquals(-APInt(16), {-16})
         luaunit.assertEquals(-APInt(-2), {2})
-        luaunit.assertEquals(-APInt(0), {0})
+        luaunit.assertEquals(-APInt(0), APInt(0))
     end
 
     function TestOperations:testEqual()
@@ -127,6 +131,8 @@ TestOperations = {}
         luaunit.assertTrue(APInt(1) < APInt(2))
         luaunit.assertTrue(APInt({0}) < APInt({0, 1}))
         luaunit.assertTrue(APInt({3, 2, 1}) < APInt({1, 2, 3}))
+        luaunit.assertTrue(APInt(0) < APInt(123))
+        luaunit.assertTrue(APInt(-123) < APInt(0))
     end
 
     function TestOperations:testToString()

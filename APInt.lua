@@ -1,3 +1,5 @@
+--!native
+
 local APInt = {}
 local APInt_metatable = {}
 APInt.__index = APInt
@@ -65,11 +67,11 @@ local function pad(array, amount)
     return result
 end
 
-local function move(src, start, length, dest)
-    local step = (length >= 0) and 1 or -1
+local function move(src, start, finish, dest)
+    local step = (start <= finish) and 1 or -1
     local j = 1
 
-    for i = start, start + length, step do
+    for i = start, finish, step do
         dest[j] = src[i]
         j = j + 1
     end
@@ -180,6 +182,14 @@ local function __remove_trailing_zeros(digits)
         new_digits[i] = digits[i]
     end
     return new_digits
+end
+
+local function copy(x)
+    local new = {}
+    for i, v in pairs(x) do
+        new[i] = v
+    end
+    return APInt(new)
 end
 
 local function __max(a, b)
@@ -319,115 +329,98 @@ local function smaller_division(a, b)
     local low_a = a[#a - 1]
 
     local smaller_a = high_a * BASE + low_a
+    if (#a == #b) then
+        smaller_a = high_a
+    end
 
-    -- The estimate uses lua's floored division + 1 so the estimate can be off by at most 3 (instead of 2 like the normal knuth's algorithm)
-    local estimate = math.floor(smaller_a / smaller_b) + 1
+    local estimate = math.floor(smaller_a / smaller_b)
+    estimate = math.min(estimate, BASE - 1)
 
-    for i = 0, 3 do
+    for i = 0, 2 do
 
         local current_quotient_estimate = estimate - i
-
-        
-        --[[ local low, high = splitted_multiplication(current_quotient_estimate, smaller_b)
-        
-        local remainder_estimation = low_a - low
-        
-        if high >= 1 then
-            remainder_estimation = BASE - remainder_estimation
-        end ]]
-        
-        
+        -- THIS CAN BE OPTIMIZED
         local remainder = APInt(a) - (APInt(current_quotient_estimate) * APInt(b))
-        
-        print("Current estimate:\t", current_quotient_estimate)
 
-        if remainder >= 0 then
+
+        if __sign(remainder) == 1 then
             -- remainder is not guaranteed to be smaller than BASE
-            assert(#remainder == 1, "Does not account for multiword remainder")
-            return current_quotient_estimate, remainder[#remainder]
+            return current_quotient_estimate, remainder
         end
-
---[[         local check_low, check_high = splitted_multiplication(current_quotient_estimate, b[1])
-
-
-
-        if check_high <= 1 then
-            local reference = check_low - a[1]
-            if check_low < a[1] and check_high == 1 then
-                print("Problems")
-                -- reference = BASE - reference
-            end
-
-            if reference < remainder_estimation then
-                print(reference, remainder_estimation)
-
-                return current_quotient_estimate
-            end
-        end ]]
     end
 
     error("Something went wrong with the estimation process")
 end
 
-
 local function long_division(a, b)
-    local solution = {}
-
-    local current_partial_remainder = 0
-
-    print("Doing:\t["..APInt.format(a).."]/["..APInt.format(b).."]")
-
-    local  i = #a
-    while i >= #b do
-
-        -- THIS CANNOT POSSIBLY BE CORRECT
-
-        local smaller_a = move(a, i, -(#b - 1), {})
-        smaller_a = invert(smaller_a)
-        table.insert(smaller_a, current_partial_remainder)
-
-        smaller_a = APInt(smaller_a)
-
-        local partial_quotient, partial_remainder = smaller_division(smaller_a, b)
-
-        -- 3330303496976432
-
-        print("-------")
-        print("smaller a", APInt.format(smaller_a))
-        print("b", APInt.format(b))
-        print("partial quotient", APInt.format(partial_quotient))
-        print("partial_remainder", APInt.format(partial_remainder))
-
-        table.insert(solution, partial_quotient)
-
-        current_partial_remainder = partial_remainder
-
-        i = i - 1
+    --print("Doing:\t["..APInt.format(a).."]/["..APInt.format(b).."]")
+    if #a == 1 and #b == 1 then
+        local quotient = math.floor(a[#a] / b[#b])
+        local remainder = a[#a] % b[#b]
+        return APInt(quotient), APInt(remainder)
     end
 
-    table.remove(solution, #solution)
+    if (#a == 0) or (a < b) then
+        return APInt(0), copy(a)
+    end
 
-    local quotient = APInt(solution)
-    local remainder = current_partial_remainder
+    local prefix = move(a, 2, #a, {})
+    local last = a[1]
+
+    local q1, r1 = long_division(APInt(prefix), b)
+    r1 = copy(r1)
+
+    table.insert(r1, 1, last)
+
+
+    local current_dividend = r1
+
+    local q_digit, r_digit = smaller_division(current_dividend, b)
+    q1 = copy(q1)
+
+    table.insert(q1, 1, q_digit)
+
+    local quotient = APInt(__remove_trailing_zeros(q1))
+    local remainder = r_digit
 
     return quotient, remainder
 end
 
+local function scale_down(remainder_ap, multiplier)
+    assert(APInt.__is_big_int(multiplier) == false, "Multiplier needs to be a normal number")
+    if multiplier <= 1 then
+        return remainder_ap
+    end
+
+    local result = {}
+    local carry = 0
+
+    for i = #remainder_ap, 1, -1 do
+        local current = remainder_ap[i] + carry * BASE
+        result[i] = math.floor(current / multiplier)
+        carry = current % multiplier
+    end
+
+    return APInt(__remove_trailing_zeros(result))
+end
+
 local function division(a, b)
+    if #a == 1 and #b == 1 then
+        local quotient = math.floor(a[#a] / b[#b])
+        local remainder = a[#a] % b[#b]
+        return APInt(quotient), APInt(remainder)
+    end
+
     local most_significant = b[#b]
-    local multiplier = math.floor(BASE / most_significant)
+    local multiplier = math.floor(BASE / (most_significant + 1))
     local denormalized_quotient, denormalized_remainder = long_division(a * multiplier, b * multiplier)
 
     local quotient = denormalized_quotient
 
-    print("denormalized", APInt.format(denormalized_remainder), multiplier)
-
-    -- denormalized_remainder is not a perfect multiple of multiplier
-    local remainder = APInt(denormalized_remainder / multiplier)
-
+    -- denormalized_remainder should be a perfect multiple of multiplier
+    local remainder = scale_down(denormalized_remainder, multiplier)
     return quotient, remainder
 end
-
 
 local function __div(a, b)
     assert(b ~= PRELOADED[0], "Division by 0")
@@ -477,7 +470,7 @@ end
 local function __lt(a, b)
     local sign_a, sign_b = __sign(a), __sign(b)
     if sign_a ~= sign_b then return sign_a < sign_b end
-    
+
     local a_n, b_n = #a, #b
     if a_n ~= b_n then
         return (a_n < b_n and sign_a == 1) or (a_n > b_n and sign_a == -1)
@@ -488,6 +481,7 @@ local function __lt(a, b)
             return (a[i] < b[i] and sign_a == 1) or (a[i] > b[i] and sign_a == -1)
         end
     end
+
     return false
 end
 
@@ -517,7 +511,6 @@ local function __tostring(x)
         local quotient, remainder = __div(work_val, TOSTRING_DIVISOR)
         local remainder_val = (remainder[1] or 0)
         table_insert(parts, 1, remainder_val)
-        print(remainder_val)
         work_val = quotient
     end
 
@@ -532,14 +525,14 @@ end
 
 function APInt.from_string(s)
     assert(type(s) == "string", "Argument to from_string must be a string")
-    
+
     local sign = 1
     if string_sub(s, 1, 1) == "-" then
         sign = -1
         s = string_sub(s, 2)
     end
     assert(string_match(s, "^[0-9]+$"), "Invalid number string format")
-    
+
     if not TOSTRING_DIVISOR then
         TOSTRING_DIVISOR = APInt.new(10^TOSTRING_DIVISOR_DIGITS)
     end
@@ -563,7 +556,7 @@ function APInt.from_string(s)
         result = result * TOSTRING_DIVISOR + APInt.new(tonumber(chunk_str))
         current_pos = current_pos + TOSTRING_DIVISOR_DIGITS
     end
-    
+
     return sign == -1 and -result or result
 end
 
@@ -574,12 +567,12 @@ function APInt.new(x, sign)
         end
         return x
     end
-    
+
     if type(x) == "string" then
         assert(sign == nil, "Cannot provide a sign argument when creating from a string")
         return APInt.from_string(x)
     end
-    
+
     if type(x) == "number" and PRELOADED[x] then
         return PRELOADED[x]
     end
@@ -600,13 +593,13 @@ function APInt.new(x, sign)
             local v = x[i]
             assert(0 <= v and v < BASE, "Elements of digits table are out of range")
         end
-        digits = x
+        digits = __remove_trailing_zeros(x)
     end
 
     if sign and digits[#digits] then
         digits[#digits] = math_abs(digits[#digits]) * sign
     end
-    
+
     return setmetatable(digits, APInt_metatable)
 end
 
@@ -630,15 +623,8 @@ local call_proxy = {
 }
 setmetatable(APInt, call_proxy)
 
---[[ print("Division:")
-print(APInt.format(smaller_division({2, 3, 4}, {BASE - 1, BASE - 1}))) ]]
+--print(APInt(0) < APInt(3002399751580330))
 
-local a = APInt(238497923847)
-local b = APInt(238477)
-
-local divided = a / b
-local remainder = a % b
-print("Division: " .. APInt.format(divided))
-print("Modulo: " .. APInt.format(remainder))
+-- print(APInt.format(APInt(4) / APInt(2)))
 
 return APInt
