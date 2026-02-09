@@ -1,8 +1,11 @@
 --!nocheck
 --!nolint
 
+---@diagnostic disable-next-line: undefined-global
+package.path = package.path .. ";../?.lua"
+
 local luaunit = require('luaunit')
-local APInt = require("./APInt")
+local APInt = require("APInt")
 
 local BASE = APInt.BASE
 

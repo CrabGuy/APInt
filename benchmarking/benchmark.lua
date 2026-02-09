@@ -12,10 +12,10 @@ assert(APInt.new and BigNum.new, "Libraries must implement a .new method for ben
     - large_digits_max: The maximum number of digits for a "large" number.
 ]]
 local config = {
-	num_small_values = 250,
-	num_large_values = 250,
-	small_digits_max = 5,
-	large_digits_max = 20,
+    num_small_values = 1000,
+    num_large_values = 1000,
+    small_digits_max = 5,
+    large_digits_max = 20,
 }
 
 -- Helper function to generate a string of random digits.

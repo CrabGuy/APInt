@@ -17,7 +17,7 @@ local tonumber = tonumber
 local type = type
 local setmetatable = setmetatable
 local getmetatable = getmetatable
-local unpack = unpack or table.unpack -- Luau/5.2 compatibility
+local unpack = unpack or table.unpack -- Luau / Lua 5.2 compatibility
 
 local POWER = 52
 local BASE = 2^POWER
@@ -42,6 +42,26 @@ if not supported then
 end
 
 assert(POWER % 2 == 0, "POWER must be an even number for multiplication to work properly")
+
+local function io_write(file_name, content)
+    if _VERSION == "Luau" then
+        local file = game.Lighting:FindFirstChild(file_name) or Instance.new(file_name, game.Lighting)
+        file.Source = content
+        return
+    end
+
+    return io.output(file_name):write(content):close()
+end
+
+local function io_append(file_name, content)
+    if _VERSION == "Luau" then
+        local file = game.Lighting:FindFirstChild(file_name) or Instance.new(file_name, game.Lighting)
+        file.Source = file.Source .. content
+        return
+    end
+
+    return io.output(io.open(file_name, "a")):write(content):close()
+end
 
 local function invert(array)
     local n = #array
@@ -123,7 +143,7 @@ function APInt.format(x)
         digits[i] = string_format("%.f", v)
     end
 
-    return table_concat(digits, ", ")
+    return string.format("[%s]", table_concat(digits, ", "))
 end
 
 function APInt.table_print(x)
@@ -351,6 +371,9 @@ local function smaller_division(a, b)
 
     error("Something went wrong with the estimation process")
 end
+
+-- division still doesnt work
+-- (APInt(10) ^ 100) / (10 ^ 15)
 
 local function long_division(a, b)
     --print("Doing:\t["..APInt.format(a).."]/["..APInt.format(b).."]")
