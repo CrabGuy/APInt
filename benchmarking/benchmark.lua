@@ -1,4 +1,7 @@
--- Import Libraries
+---@diagnostic disable-next-line: undefined-global
+package.path = package.path .. ";../?.lua"
+
+
 local APInt = require("./APInt")
 local BigNum = require("./BigNum")
 

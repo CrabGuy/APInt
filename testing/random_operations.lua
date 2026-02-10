@@ -55,5 +55,6 @@ end
 io_write("operations.txt", "")
 
 perform_operations("operations.txt", OPERATIONS_AMOUNT, function(x, y) return x + y end, "+")
+perform_operations("operations.txt", OPERATIONS_AMOUNT, function(x, y) return x - y end, "-")
 perform_operations("operations.txt", OPERATIONS_AMOUNT, function(x, y) return x * y end, "*")
 perform_operations("operations.txt", OPERATIONS_AMOUNT, function(x, y) return x / y end, "/")

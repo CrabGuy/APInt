@@ -89,11 +89,13 @@ TestOperations = {}
         luaunit.assertEquals(APInt(0) / APInt(420), {0})
         luaunit.assertEquals(APInt({0, 1}) / APInt(math.sqrt(BASE)), APInt(math.sqrt(BASE)))
         luaunit.assertEquals(APInt(238497923847) / APInt(238477), APInt(1000087))
-        
+        luaunit.assertEquals((APInt(10) ^ 100) / (10 ^ 15), APInt({0, 4419942254379008, 1218062511332401, 2252745923636380, 1562451958731451, 5397605})) -- during the long division the remainder becomes 0
+
         local huge_num_1 = APInt({2310042140305905, 3779025547483650, 2759084521790143, 1333207883151640, 2871280155256532, 2361179593819894})
         local huge_num_2 = APInt({4380989235077369, 1317378481282125, 3473886240354038})
         local huge_result = APInt({664333360460499, 3982308273631934, 3061069592710197})
-        
+
+
         luaunit.assertEquals(huge_num_1 / huge_num_2, huge_result)
         luaunit.assertError(function() return APInt(10) / APInt(0) end)
     end

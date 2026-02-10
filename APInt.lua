@@ -342,6 +342,10 @@ local function smaller_division(a, b)
         -- THIS CAN BE OPTIMIZED
         local remainder = APInt(a) - (APInt(current_quotient_estimate) * APInt(b))
 
+        if remainder == APInt(b) then
+            remainder = APInt(0)
+            current_quotient_estimate = current_quotient_estimate + 1
+        end
 
         if __sign(remainder) == 1 then
             -- remainder is not guaranteed to be smaller than BASE
@@ -352,11 +356,7 @@ local function smaller_division(a, b)
     error("Something went wrong with the estimation process")
 end
 
--- division still doesnt work
--- (APInt(10) ^ 100) / (10 ^ 15)
-
 local function long_division(a, b)
-    --print("Doing:\t["..APInt.format(a).."]/["..APInt.format(b).."]")
     if #a == 1 and #b == 1 then
         local quotient = math.floor(a[#a] / b[#b])
         local remainder = a[#a] % b[#b]
@@ -379,8 +379,8 @@ local function long_division(a, b)
     local current_dividend = r1
 
     local q_digit, r_digit = smaller_division(current_dividend, b)
-    q1 = copy(q1)
 
+    q1 = copy(q1)
     table.insert(q1, 1, q_digit)
 
     local quotient = APInt(__remove_trailing_zeros(q1))
@@ -420,7 +420,7 @@ local function division(a, b)
 
     local quotient = denormalized_quotient
 
-    -- denormalized_remainder should be a perfect multiple of multiplier
+    -- denormalized_remainder is an exact multiple of multiplier
     local remainder = scale_down(denormalized_remainder, multiplier)
     return quotient, remainder
 end
@@ -490,7 +490,7 @@ end
 
 local function __unm(x)
     if x[#x] == 0 then return PRELOADED[0] end
-    local clone = {unpack(x)}
+    local clone = copy(x)
     clone[#clone] = -clone[#clone]
     return APInt.new(clone)
 end
@@ -625,9 +625,5 @@ local call_proxy = {
     end
 }
 setmetatable(APInt, call_proxy)
-
---print(APInt(0) < APInt(3002399751580330))
-
--- print(APInt.format(APInt(4) / APInt(2)))
 
 return APInt
