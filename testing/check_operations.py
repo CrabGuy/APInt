@@ -35,4 +35,5 @@ def check_operations(file_name):
 
 if __name__ == "__main__":
     check_operations("operations.txt")
+    print("All operations are correct!")
     

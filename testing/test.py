@@ -10,6 +10,7 @@ print(result_got == correct_result)
 print(result_got)
 print(correct_result)
 
+
 """ a = decimal([1, 2, 3])
 b = decimal([2251799813685249])
 multiplier = 1

@@ -43,26 +43,6 @@ end
 
 assert(POWER % 2 == 0, "POWER must be an even number for multiplication to work properly")
 
-local function io_write(file_name, content)
-    if _VERSION == "Luau" then
-        local file = game.Lighting:FindFirstChild(file_name) or Instance.new(file_name, game.Lighting)
-        file.Source = content
-        return
-    end
-
-    return io.output(file_name):write(content):close()
-end
-
-local function io_append(file_name, content)
-    if _VERSION == "Luau" then
-        local file = game.Lighting:FindFirstChild(file_name) or Instance.new(file_name, game.Lighting)
-        file.Source = file.Source .. content
-        return
-    end
-
-    return io.output(io.open(file_name, "a")):write(content):close()
-end
-
 local function invert(array)
     local n = #array
     local new = {}
