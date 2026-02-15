@@ -318,7 +318,7 @@ end
 
 -- temporary bruteforce solution
 local function smaller_division(a, b)
-
+    --print("Smaller division input", APInt.format(a), APInt.format(b))
     assert(0 <= #a - #b and #a - #b <= 1, "Invalid input for small division")
 
     local smaller_b = b[#b]
@@ -339,16 +339,39 @@ local function smaller_division(a, b)
     for i = 0, 2 do
 
         local current_quotient_estimate = estimate - i
-        -- THIS CAN BE OPTIMIZED
-        local remainder = APInt(a) - (APInt(current_quotient_estimate) * APInt(b))
+        -- performing modulo reduction to have a correct result without overflowing
+        -- THIS IS WRONG it doesnt take into account the 0s at the end of the original numbers of the division
+        local remainder_hat = (high_a * (BASE % smaller_b) + low_a) % smaller_b
 
-        if remainder == APInt(b) then
-            remainder = APInt(0)
-            current_quotient_estimate = current_quotient_estimate + 1
-        end
+        local is_remainder_negative = current_quotient_estimate * b[1] - a[1] > remainder_hat
 
-        if __sign(remainder) == 1 then
-            -- remainder is not guaranteed to be smaller than BASE
+        print("Current estimate", APInt.format(current_quotient_estimate))
+        print("First part", APInt.format(current_quotient_estimate * b[1] - a[1]))
+        print("R_hat\t", APInt.format(remainder_hat))
+        -- First part:  4872250045329605500000000000000
+        -- R_hat:       3870280929771520
+        -- BASE:        4503599627370496
+
+
+        if not is_remainder_negative then
+            -- remainder is guaranteed to fit in 2 digits
+            local low1, high1 = splitted_multiplication(current_quotient_estimate, b[1])
+            local low2, high2 = splitted_multiplication(current_quotient_estimate, b[2] or 0)
+
+            local result1 = low1
+            local result2 = high1 + low2
+            if result2 > BASE then
+                result2 = (high1 - BASE) + low2
+            end
+
+            local multiplication_result = APInt(__remove_trailing_zeros({result1, result2}))
+            local remainder = APInt({a[1], a[2]}) - multiplication_result
+
+            print("Quotient--", APInt.format(current_quotient_estimate))
+            print("Remainder", APInt.format(remainder))
+            --[[ print("First part", APInt.format(current_quotient_estimate * b[1] - a[1]))
+            print("R_hat\t", APInt.format(remainder_hat)) ]]
+
             return current_quotient_estimate, remainder
         end
     end
@@ -362,6 +385,7 @@ local function long_division(a, b)
         local remainder = a[#a] % b[#b]
         return APInt(quotient), APInt(remainder)
     end
+    print("Doing:".. APInt.format(a).."/"..APInt.format(b))
 
     if (#a == 0) or (a < b) then
         return APInt(0), copy(a)
