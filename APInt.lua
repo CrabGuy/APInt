@@ -127,7 +127,7 @@ function APInt.format(x)
 end
 
 function APInt.table_print(x)
-    print("{" .. APInt.format(x) .. "}")
+    print(APInt.format(x))
 end
 
 local function typecheck(f)
@@ -316,10 +316,13 @@ end
 -- Knuth’s Algorithm D
 -- https://ridiculousfish.com/blog/posts/labor-of-division-episode-iv.html
 
--- temporary bruteforce solution
 local function smaller_division(a, b)
     --print("Smaller division input", APInt.format(a), APInt.format(b))
     assert(0 <= #a - #b and #a - #b <= 1, "Invalid input for small division")
+
+    if #b == 1 then
+        return 
+    end
 
     local smaller_b = b[#b]
 
@@ -339,19 +342,14 @@ local function smaller_division(a, b)
     for i = 0, 2 do
 
         local current_quotient_estimate = estimate - i
-        -- performing modulo reduction to have a correct result without overflowing
-        -- THIS IS WRONG it doesnt take into account the 0s at the end of the original numbers of the division
-        local remainder_hat = (high_a * (BASE % smaller_b) + low_a) % smaller_b
+        -- this MAYBE needs to take into account the zeros at the end of the number
+        local remainder_hat = smaller_a % smaller_b
 
-        local is_remainder_negative = current_quotient_estimate * b[1] - a[1] > remainder_hat
+        local is_remainder_negative = APInt(current_quotient_estimate) * APInt(b[#b - 1]) > APInt({a[#a - 2], remainder_hat})
+        --print("Left part:", APInt.format(APInt(current_quotient_estimate) * APInt(b[1])))
+        --print("Right part:", APInt.format(APInt({a[1], remainder_hat})))
 
         print("Current estimate", APInt.format(current_quotient_estimate))
-        print("First part", APInt.format(current_quotient_estimate * b[1] - a[1]))
-        print("R_hat\t", APInt.format(remainder_hat))
-        -- First part:  4872250045329605500000000000000
-        -- R_hat:       3870280929771520
-        -- BASE:        4503599627370496
-
 
         if not is_remainder_negative then
             -- remainder is guaranteed to fit in 2 digits
@@ -413,22 +411,24 @@ local function long_division(a, b)
     return quotient, remainder
 end
 
-local function scale_down(remainder_ap, multiplier)
-    assert(APInt.__is_big_int(multiplier) == false, "Multiplier needs to be a normal number")
-    if multiplier <= 1 then
-        return remainder_ap
+-- THIS DOES NOT WORK, INTERMEDIATE OPERATIONS OVERFLOW
+local function single_digit_divide(a, b)
+    assert(APInt.__is_big_int(b) == false, "b needs to be a normal number")
+    assert(b ~= 0, "Single digit dividing by 0")
+    if b == 1 then
+        return a, APInt(0)
     end
 
-    local result = {}
-    local carry = 0
+    local quotient = {}
+    local remainder = 0
 
-    for i = #remainder_ap, 1, -1 do
-        local current = remainder_ap[i] + carry * BASE
-        result[i] = math.floor(current / multiplier)
-        carry = current % multiplier
+    for i = #a, 1, -1 do
+        local current_dividend = remainder * BASE + a[i]
+        quotient[i] = math.floor(current_dividend / b)
+        remainder = current_dividend % b
     end
 
-    return APInt(__remove_trailing_zeros(result))
+    return APInt(__remove_trailing_zeros(quotient)), APInt(remainder)
 end
 
 local function division(a, b)
@@ -438,6 +438,10 @@ local function division(a, b)
         return APInt(quotient), APInt(remainder)
     end
 
+    if #b == 1 then
+        return single_digit_divide(a, b[1])
+    end
+
     local most_significant = b[#b]
     local multiplier = math.floor(BASE / (most_significant + 1))
     local denormalized_quotient, denormalized_remainder = long_division(a * multiplier, b * multiplier)
@@ -445,7 +449,7 @@ local function division(a, b)
     local quotient = denormalized_quotient
 
     -- denormalized_remainder is an exact multiple of multiplier
-    local remainder = scale_down(denormalized_remainder, multiplier)
+    local remainder = single_digit_divide(denormalized_remainder, multiplier)
     return quotient, remainder
 end
 
