@@ -17,7 +17,7 @@ end
 local config = {
     num_small_values = 1000,
     num_large_values = 500,
-    num_creation_values = 10000,
+    num_creation_values = 1000,
     small_digits_max = 5,
     large_digits_max = 50,
     ops_per_binary = 50000,
