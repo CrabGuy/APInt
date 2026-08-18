@@ -1,0 +1,3 @@
+- Try to write "splitted division" to divide a 2 digit number by a 1 digit one with an approximation using "hardware" division and test using splitted multiplication
+- Fix knuth's algorithm D
+- Group up common patterns into functions
