@@ -48,6 +48,26 @@ local TOSTRING_DIVISOR_DIGITS = math_floor(math_log10(BASE))
 local TOSTRING_DIVISOR = nil
 local PADDING_FORMAT = "%0" .. TOSTRING_DIVISOR_DIGITS .. ".0f"
 
+local BASE_26 = SPLIT_BASE
+
+local function split_mul(a, b)
+	local a_hi = math_floor(a / SPLIT_BASE)
+	local a_lo = a % SPLIT_BASE
+	local b_hi = math_floor(b / SPLIT_BASE)
+	local b_lo = b % SPLIT_BASE
+
+	local cross = a_hi * b_lo + a_lo * b_hi
+	local cross_hi = math_floor(cross / SPLIT_BASE)
+	local cross_lo = cross % SPLIT_BASE
+
+	local low = cross_lo * SPLIT_BASE + a_lo * b_lo
+	local carry1 = math_floor(low / BASE)
+	local total_low = low % BASE
+	local total_high = a_hi * b_hi + cross_hi + carry1
+
+	return total_low, total_high
+end
+
 local function __remove_trailing_zeros(digits)
 	local n = #digits
 	while n > 1 and digits[n] == 0 do
@@ -69,16 +89,18 @@ end
 
 local function __abs_mag(x)
 	local t = {}
-	for i = 1, #x do
-		t[i] = math_abs(x[i])
+	local n = #x
+	for i = 1, n - 1 do
+		t[i] = x[i]
 	end
+	t[n] = math_abs(x[n])
 	return t
 end
 
 local function __from_mag(mag, sign)
 	mag = __remove_trailing_zeros(mag)
 	if mag[#mag] == 0 then
-		sign = 1
+		return PRELOADED[0]
 	end
 	if sign == -1 then
 		mag[#mag] = -mag[#mag]
@@ -146,6 +168,20 @@ local function mag_eq(a, b)
 	return true
 end
 
+local function mag_lt_abs(a, b)
+	if #a ~= #b then
+		return #a < #b
+	end
+	for i = #a, 1, -1 do
+		local va = (i == #a) and math_abs(a[i]) or a[i]
+		local vb = (i == #b) and math_abs(b[i]) or b[i]
+		if va ~= vb then
+			return va < vb
+		end
+	end
+	return false
+end
+
 local function to_base26(a)
 	local res = {}
 	for i = 1, #a do
@@ -167,8 +203,6 @@ local function from_base26(a)
 	end
 	return __remove_trailing_zeros(res)
 end
-
-local BASE_26 = SPLIT_BASE
 
 local function mag_mul_base26(a, b)
 	local result = {}
@@ -341,31 +375,320 @@ local function mag_div(a, b)
 	return from_base26(q26), from_base26(r26)
 end
 
-function APInt.__is_big_int(x)
+local function is_big_int(x)
 	return type(x) == "table" and getmetatable(x) == APInt_metatable
 end
 
-local function typecheck(f)
-	return function(...)
-		local arguments = { ... }
-		for i, v in ipairs(arguments) do
-			if not APInt.__is_big_int(v) then
-				if APInt.MODE == "STRICT" then
-					error("Argument for operation was not APInt")
-				else
-					if APInt.MODE == "WARNING" then
-						warn("Argument for operation was not a APInt, converted")
-					end
-					arguments[i] = APInt.new(v)
-				end
+APInt.__is_big_int = is_big_int
+
+local function __abs(x)
+	if x[#x] >= 0 then
+		return x
+	end
+	local n = #x
+	if n == 1 and PRELOADED[-x[1]] then
+		return PRELOADED[-x[1]]
+	end
+	local t = {}
+	for i = 1, n do
+		t[i] = x[i]
+	end
+	t[n] = math_abs(t[n])
+	return setmetatable(t, APInt_metatable)
+end
+
+local function __unm(x)
+	if x[#x] == 0 then
+		return PRELOADED[0]
+	end
+	local n = #x
+	if n == 1 and PRELOADED[-x[1]] then
+		return PRELOADED[-x[1]]
+	end
+	local t = {}
+	for i = 1, n do
+		t[i] = x[i]
+	end
+	t[n] = -t[n]
+	return setmetatable(t, APInt_metatable)
+end
+
+local function __add(a, b)
+	if #a == 1 and #b == 1 then
+		local sum = a[1] + b[1]
+		if sum == 0 then
+			return PRELOADED[0]
+		end
+		if PRELOADED[sum] then
+			return PRELOADED[sum]
+		end
+		if sum > 0 then
+			if sum < BASE then
+				return setmetatable({ sum }, APInt_metatable)
+			else
+				local low = sum % BASE
+				local high = math_floor(sum / BASE)
+				return setmetatable({ low, high }, APInt_metatable)
+			end
+		else
+			local m = -sum
+			if PRELOADED[-m] then
+				return PRELOADED[-m]
+			end
+			if m < BASE then
+				return setmetatable({ -m }, APInt_metatable)
+			else
+				local low = m % BASE
+				local high = math_floor(m / BASE)
+				return setmetatable({ low, -high }, APInt_metatable)
 			end
 		end
-		return f(unpack(arguments))
+	end
+
+	local sign_a = __sign(a)
+	local sign_b = __sign(b)
+	local mag_a = sign_a == 1 and a or __abs_mag(a)
+	local mag_b = sign_b == 1 and b or __abs_mag(b)
+
+	if sign_a == sign_b then
+		return __from_mag(mag_add(mag_a, mag_b), sign_a)
+	else
+		if mag_eq(mag_a, mag_b) then
+			return PRELOADED[0]
+		end
+		if mag_lt(mag_a, mag_b) then
+			return __from_mag(mag_sub(mag_b, mag_a), sign_b)
+		else
+			return __from_mag(mag_sub(mag_a, mag_b), sign_a)
+		end
 	end
 end
 
+local function __sub(a, b)
+	return __add(a, __unm(b))
+end
+
+local function __mul(a, b)
+	if a == PRELOADED[0] or b == PRELOADED[0] then
+		return PRELOADED[0]
+	end
+
+	if #a == 1 and #b == 1 then
+		local va = a[1]
+		local vb = b[1]
+		local sign = 1
+		if va < 0 then
+			sign = -sign
+			va = -va
+		end
+		if vb < 0 then
+			sign = -sign
+			vb = -vb
+		end
+
+		local low, high = split_mul(va, vb)
+		if low == 0 and high == 0 then
+			return PRELOADED[0]
+		end
+
+		if high == 0 then
+			if sign == -1 then
+				low = -low
+			end
+			return setmetatable({ low }, APInt_metatable)
+		else
+			if sign == -1 then
+				high = -high
+			end
+			return setmetatable({ low, high }, APInt_metatable)
+		end
+	end
+
+	local sign_a = __sign(a)
+	local sign_b = __sign(b)
+	local mag_a = sign_a == 1 and a or __abs_mag(a)
+	local mag_b = sign_b == 1 and b or __abs_mag(b)
+	local mag = mag_mul(mag_a, mag_b)
+
+	return __from_mag(mag, sign_a * sign_b)
+end
+
+local function __div(a, b)
+	assert(b ~= PRELOADED[0], "Division by 0")
+
+	if #a == 1 and #b == 1 then
+		local va = a[1]
+		local vb = b[1]
+		local q_sign = 1
+		local abs_a = math_abs(va)
+		local abs_b = math_abs(vb)
+
+		local q = math_floor(abs_a / abs_b)
+		local r = abs_a % abs_b
+
+		if va < 0 then
+			q_sign = -q_sign
+		end
+		if vb < 0 then
+			q_sign = -q_sign
+		end
+
+		local q_val = q
+		if q_sign == -1 then
+			q_val = -q
+		end
+
+		local q_apint
+		if q_val == 0 then
+			q_apint = PRELOADED[0]
+		elseif PRELOADED[q_val] then
+			q_apint = PRELOADED[q_val]
+		else
+			q_apint = setmetatable({ q_val }, APInt_metatable)
+		end
+
+		local r_apint
+		if r == 0 then
+			r_apint = PRELOADED[0]
+		elseif PRELOADED[r] then
+			r_apint = PRELOADED[r]
+		else
+			r_apint = setmetatable({ r }, APInt_metatable)
+		end
+
+		return q_apint, r_apint
+	end
+
+	local sign_a = __sign(a)
+	local sign_b = __sign(b)
+	local mag_a = sign_a == 1 and a or __abs_mag(a)
+	local mag_b = sign_b == 1 and b or __abs_mag(b)
+	local q_mag, r_mag = mag_div(mag_a, mag_b)
+
+	return __from_mag(q_mag, sign_a * sign_b), __from_mag(r_mag, 1)
+end
+
+local function __mod(a, b)
+	assert(b ~= PRELOADED[0], "Modulo by 0")
+	local _, r = __div(a, b)
+	if __sign(a) == -1 and r ~= PRELOADED[0] then
+		r = __sub(__abs(b), r)
+	end
+	return r
+end
+
+local function div_small_2_apint(x)
+	local q_mag, r_mag = mag_div_small_2(x)
+	return __from_mag(q_mag, 1), __from_mag(r_mag, 1)
+end
+
+local function __pow(a, b)
+	if b < PRELOADED[0] then
+		assert(a ~= PRELOADED[0], "Negative power of 0")
+		if a == PRELOADED[1] then
+			return PRELOADED[1]
+		end
+		return PRELOADED[0]
+	end
+
+	if b == PRELOADED[0] then
+		return PRELOADED[1]
+	end
+
+	local result = PRELOADED[1]
+	local base = a
+	local exp = b
+
+	while exp > PRELOADED[0] do
+		local q, r = div_small_2_apint(exp)
+		if r == PRELOADED[1] then
+			result = __mul(result, base)
+		end
+		base = __mul(base, base)
+		exp = q
+	end
+
+	return result
+end
+
+local function __eq(a, b)
+	if type(a) ~= type(b) then
+		return false
+	end
+	if __sign(a) ~= __sign(b) then
+		return false
+	end
+	if #a ~= #b then
+		return false
+	end
+	if #a == 1 then
+		return a[1] == b[1]
+	end
+	for i = 1, #a do
+		if a[i] ~= b[i] then
+			return false
+		end
+	end
+	return true
+end
+
+local function __lt(a, b)
+	local sign_a = __sign(a)
+	local sign_b = __sign(b)
+
+	if sign_a ~= sign_b then
+		return sign_a < sign_b
+	end
+
+	if sign_a == 1 then
+		return mag_lt_abs(a, b)
+	else
+		return mag_lt_abs(b, a)
+	end
+end
+
+local function __tostring(x)
+	if #x == 1 then
+		local val = x[1]
+		if val == 0 then
+			return "0"
+		end
+		if val < 0 then
+			return "-" .. string_format("%.f", -val)
+		end
+		return string_format("%.f", val)
+	end
+
+	if not TOSTRING_DIVISOR then
+		TOSTRING_DIVISOR = APInt.new(10 ^ TOSTRING_DIVISOR_DIGITS)
+	end
+
+	if __eq(x, PRELOADED[0]) then
+		return "0"
+	end
+
+	local work_val = __abs(x)
+	local sign = (__sign(x) == -1) and "-" or ""
+	local parts = {}
+
+	while work_val > PRELOADED[0] do
+		local quotient, remainder = __div(work_val, TOSTRING_DIVISOR)
+		local remainder_val = (remainder[1] or 0)
+		table_insert(parts, 1, remainder_val)
+		work_val = quotient
+	end
+
+	local first = parts[1]
+	local str = sign .. first
+	for i = 2, #parts do
+		str = str .. string_format(PADDING_FORMAT, parts[i])
+	end
+
+	return str
+end
+
 function APInt.new(x, sign)
-	if APInt.__is_big_int(x) then
+	if is_big_int(x) then
 		if sign and __sign(x) ~= sign then
 			return -x
 		end
@@ -412,160 +735,6 @@ function APInt.new(x, sign)
 	return setmetatable(digits, APInt_metatable)
 end
 
-local function __abs(x)
-	return __from_mag(__abs_mag(x), 1)
-end
-
-local function __unm(x)
-	if x[#x] == 0 then
-		return PRELOADED[0]
-	end
-	return __from_mag(__abs_mag(x), -__sign(x))
-end
-
-local function __add(a, b)
-	local sign_a = __sign(a)
-	local sign_b = __sign(b)
-	local mag_a = __abs_mag(a)
-	local mag_b = __abs_mag(b)
-
-	if sign_a == sign_b then
-		return __from_mag(mag_add(mag_a, mag_b), sign_a)
-	else
-		if mag_eq(mag_a, mag_b) then
-			return PRELOADED[0]
-		end
-		if mag_lt(mag_a, mag_b) then
-			return __from_mag(mag_sub(mag_b, mag_a), sign_b)
-		else
-			return __from_mag(mag_sub(mag_a, mag_b), sign_a)
-		end
-	end
-end
-
-local function __sub(a, b)
-	return __add(a, __unm(b))
-end
-
-local function __mul(a, b)
-	if a == PRELOADED[0] or b == PRELOADED[0] then
-		return PRELOADED[0]
-	end
-
-	local sign = __sign(a) * __sign(b)
-	local mag = mag_mul(__abs_mag(a), __abs_mag(b))
-	return __from_mag(mag, sign)
-end
-
-local function __div(a, b)
-	assert(b ~= PRELOADED[0], "Division by 0")
-	local sign_q = __sign(a) * __sign(b)
-	local q_mag, r_mag = mag_div(__abs_mag(a), __abs_mag(b))
-	local q = __from_mag(q_mag, sign_q)
-	local r = __from_mag(r_mag, 1)
-	return q, r
-end
-
-local function __mod(a, b)
-	assert(b ~= PRELOADED[0], "Modulo by 0")
-	local _, r = __div(a, b)
-	if __sign(a) == -1 and r ~= PRELOADED[0] then
-		r = __sub(__abs(b), r)
-	end
-	return r
-end
-
-local function div_small_2_apint(x)
-	local q_mag, r_mag = mag_div_small_2(__abs_mag(x))
-	return __from_mag(q_mag, 1), __from_mag(r_mag, 1)
-end
-
-local function __pow(a, b)
-	if b < PRELOADED[0] then
-		assert(a ~= PRELOADED[0], "Negative power of 0")
-		if a == PRELOADED[1] then
-			return PRELOADED[1]
-		end
-		return PRELOADED[0]
-	end
-
-	if b == PRELOADED[0] then
-		return PRELOADED[1]
-	end
-
-	local result = PRELOADED[1]
-	local base = a
-	local exp = b
-
-	while exp > PRELOADED[0] do
-		local q, r = div_small_2_apint(exp)
-		if r == PRELOADED[1] then
-			result = __mul(result, base)
-		end
-		base = __mul(base, base)
-		exp = q
-	end
-
-	return result
-end
-
-local function __eq(a, b)
-	if type(a) ~= type(b) then
-		return false
-	end
-	if __sign(a) ~= __sign(b) then
-		return false
-	end
-	return mag_eq(__abs_mag(a), __abs_mag(b))
-end
-
-local function __lt(a, b)
-	local sign_a = __sign(a)
-	local sign_b = __sign(b)
-
-	if sign_a ~= sign_b then
-		return sign_a < sign_b
-	end
-
-	local mag_a = __abs_mag(a)
-	local mag_b = __abs_mag(b)
-
-	if sign_a == 1 then
-		return mag_lt(mag_a, mag_b)
-	else
-		return mag_lt(mag_b, mag_a)
-	end
-end
-
-local function __tostring(x)
-	if not TOSTRING_DIVISOR then
-		TOSTRING_DIVISOR = APInt.new(10 ^ TOSTRING_DIVISOR_DIGITS)
-	end
-
-	if __eq(x, PRELOADED[0]) then
-		return "0"
-	end
-
-	local work_val = __abs(x)
-	local sign = (__sign(x) == -1) and "-" or ""
-	local parts = {}
-
-	while work_val > PRELOADED[0] do
-		local quotient, remainder = __div(work_val, TOSTRING_DIVISOR)
-		local remainder_val = (remainder[1] or 0)
-		table_insert(parts, 1, remainder_val)
-		work_val = quotient
-	end
-
-	local first = parts[1]
-	local str = sign .. first
-	for i = 2, #parts do
-		str = str .. string_format(PADDING_FORMAT, parts[i])
-	end
-
-	return str
-end
-
 function APInt.from_string(s)
 	assert(type(s) == "string", "Argument to from_string must be a string")
 
@@ -610,7 +779,7 @@ function APInt.format(x)
 		return string_format("%.f", x)
 	end
 
-	if type(x) == "table" and not APInt.__is_big_int(x) then
+	if type(x) == "table" and not is_big_int(x) then
 		for _, v in pairs(x) do
 			assert(type(v) == "number", "Trying to format an invalid table")
 		end
@@ -630,16 +799,30 @@ function APInt.table_print(x)
 	print(APInt.format(x))
 end
 
+local function convert_arg(v)
+	if is_big_int(v) then
+		return v
+	end
+	if APInt.MODE == "STRICT" then
+		error("Argument for operation was not APInt")
+	else
+		if APInt.MODE == "WARNING" then
+			warn("Argument for operation was not a APInt, converted")
+		end
+		return APInt.new(v)
+	end
+end
+
 APInt_metatable.__index = APInt
-APInt_metatable.__add = typecheck(__add)
-APInt_metatable.__sub = typecheck(__sub)
-APInt_metatable.__mod = typecheck(__mod)
-APInt_metatable.__div = typecheck(__div)
-APInt_metatable.__mul = typecheck(__mul)
-APInt_metatable.__pow = typecheck(__pow)
+APInt_metatable.__add = function(a, b) return __add(convert_arg(a), convert_arg(b)) end
+APInt_metatable.__sub = function(a, b) return __sub(convert_arg(a), convert_arg(b)) end
+APInt_metatable.__mul = function(a, b) return __mul(convert_arg(a), convert_arg(b)) end
+APInt_metatable.__div = function(a, b) return __div(convert_arg(a), convert_arg(b)) end
+APInt_metatable.__mod = function(a, b) return __mod(convert_arg(a), convert_arg(b)) end
+APInt_metatable.__pow = function(a, b) return __pow(convert_arg(a), convert_arg(b)) end
 APInt_metatable.__tostring = __tostring
-APInt_metatable.__unm = typecheck(__unm)
-APInt_metatable.__lt = typecheck(__lt)
+APInt_metatable.__unm = __unm
+APInt_metatable.__lt = __lt
 APInt_metatable.__eq = __eq
 
 local call_proxy = {
