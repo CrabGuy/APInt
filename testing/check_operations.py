@@ -1,39 +1,57 @@
+import sys
+
 BASE = 2**52
 
-def is_number(x):
-    return isinstance(x, (int, float))
-
-def decimal(number):
-    if is_number(number):
-        return int(number)
-
-    return sum(digit * (BASE**i) for i, digit in enumerate(number))
-
+def parse_apint(s):
+    s = s.strip()
+    if s.startswith('[') and s.endswith(']'):
+        parts = [int(x.strip()) for x in s[1:-1].split(',')]
+        res = 0
+        for i, val in enumerate(parts):
+            res += val * (BASE ** i)
+        return res
+    else:
+        return int(s)
 
 def check_operations(file_name):
-    file = open(file_name)
-    lines = file.readlines()
+    with open(file_name, 'r') as f:
+        lines = f.readlines()
 
-    for (index, line) in enumerate(lines):
-
-        is_empty_line = len(line) == 1
-
-        if is_empty_line:
+    failed = False
+    for line_num, line in enumerate(lines, 1):
+        line = line.strip()
+        if not line or '=' not in line:
             continue
 
-        tokens = line.split("=")
-        assert len(tokens) == 2, "Invalid formatting"
+        expr, expected_str = line.split('=', 1)
+        expected = parse_apint(expected_str)
 
-        operations = tokens[0]
-        given_result = decimal(eval(tokens[1]))
+        if '+' in expr:
+            a_str, b_str = expr.split('+')
+            actual = int(a_str) + int(b_str)
+        elif '-' in expr:
+            a_str, b_str = expr.split('-')
+            actual = int(a_str) - int(b_str)
+        elif '*' in expr:
+            a_str, b_str = expr.split('*')
+            actual = int(a_str) * int(b_str)
+        elif '/' in expr:
+            a_str, b_str = expr.split('/')
+            actual = int(a_str) // int(b_str)
+        else:
+            continue
 
-        correct_result = decimal(eval(operations))
+        if actual != expected:
+            print(f"Error on line {line_num}: {expr}")
+            print(f"  Expected: {actual}")
+            print(f"  Got:      {expected}")
+            failed = True
 
-        assert correct_result == given_result, f"ERROR: line {index}\nOperation:\t{operations}\nCorrect result:\t{correct_result}\nResult got:\t{given_result}"
-
-    file.close()
+    if not failed:
+        print("All operations validated successfully!")
+    else:
+        sys.exit(1)
 
 if __name__ == "__main__":
-    check_operations("operations.txt")
-    print("All operations are correct!")
-    
+    file_name = sys.argv[1] if len(sys.argv) > 1 else "operations.txt"
+    check_operations(file_name)
