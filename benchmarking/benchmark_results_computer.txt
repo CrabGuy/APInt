@@ -1,115 +1,144 @@
-local config = {
-    num_small_values = 1000,
-    num_large_values = 1000,
-    small_digits_max = 5,
-    large_digits_max = 20,
-}
-
-Preparing numbers for benchmarks...
+Preparing benchmark data...
 --- Starting Benchmarks ---
 
---- Operation: mul ---
-BigNum:
-        Small vs Small: 4.946340
-        Large vs Large: 7.049574
-        Small vs Large: 6.829469
+--- Operation: add (binary) ---
 APInt:
-        Small vs Small: 3.890105
-        Large vs Large: 4.317455
-        Small vs Large: 4.088987
-
---- Operation: unm ---
+	small vs small: 2601457 ops/s
+	large vs large: 1142596 ops/s
+	small vs large: 1320917 ops/s
 BigNum:
-        Small vs Small: 1.829636
-        Large vs Large: 1.865873
-        Small vs Large: 1.746778
-APInt:
-        Small vs Small: 1.438485
-        Large vs Large: 1.298994
-        Small vs Large: 1.276985
+	small vs small: 398057 ops/s
+	large vs large: 407150 ops/s
+	small vs large: 404465 ops/s
 
---- Operation: pow ---
+APInt is 6.54x faster than BigNum for small vs small
+APInt is 2.81x faster than BigNum for large vs large
+APInt is 3.27x faster than BigNum for small vs large
+
+--- Operation: sub (binary) ---
+APInt:
+	small vs small: 1551952 ops/s
+	large vs large: 629941 ops/s
+	small vs large: 756687 ops/s
 BigNum:
-        Small vs Small: 0.192776
-        Large vs Large: 0.245578
-        Small vs Large: N/A
-APInt:
-        Small vs Small: 0.110738
-        Large vs Large: 0.126738
-        Small vs Large: N/A
+	small vs small: 235774 ops/s
+	large vs large: 237344 ops/s
+	small vs large: 248127 ops/s
 
---- Operation: add ---
+APInt is 6.58x faster than BigNum for small vs small
+APInt is 2.65x faster than BigNum for large vs large
+APInt is 3.05x faster than BigNum for small vs large
+
+--- Operation: mul (binary) ---
+APInt:
+	small vs small: 1097876 ops/s
+	large vs large: 226454 ops/s
+	small vs large: 402609 ops/s
 BigNum:
-        Small vs Small: 3.100946
-        Large vs Large: 3.123440
-        Small vs Large: 3.057055
-APInt:
-        Small vs Small: 1.671011
-        Large vs Large: 1.703368
-        Small vs Large: 1.644206
+	small vs small: 263508 ops/s
+	large vs large: 107916 ops/s
+	small vs large: 125002 ops/s
 
---- Operation: lt ---
+APInt is 4.17x faster than BigNum for small vs small
+APInt is 2.10x faster than BigNum for large vs large
+APInt is 3.22x faster than BigNum for small vs large
+
+--- Operation: div (binary) ---
+APInt:
+	small vs small: 1571586 ops/s
+	large vs large: 185822 ops/s
+	small vs large: 449711 ops/s
 BigNum:
-        Small vs Small: 1.094656
-        Large vs Large: 1.093293
-        Small vs Large: 1.10939
-APInt:
-        Small vs Small: 0.852313
-        Large vs Large: 0.895292
-        Small vs Large: 0.956514
+	small vs small: 156421 ops/s
+	large vs large: 10349 ops/s
+	small vs large: 624922 ops/s
 
---- Operation: tostr ---
+APInt is 10.05x faster than BigNum for small vs small
+APInt is 17.96x faster than BigNum for large vs large
+BigNum is 1.39x faster than APInt for small vs large
+
+--- Operation: mod (binary) ---
+APInt:
+	small vs small: 1118130 ops/s
+	large vs large: 176278 ops/s
+	small vs large: 403779 ops/s
 BigNum:
-        Small vs Small: 33.174953
-        Large vs Large: 152.764841
-        Small vs Large: 30.085316
-APInt:
-        Small vs Small: 6.394255
-        Large vs Large: 11.557140
-        Small vs Large: 6.188827
+	small vs small: 154031 ops/s
+	large vs large: 10368 ops/s
+	small vs large: 606281 ops/s
 
---- Operation: sub ---
+APInt is 7.26x faster than BigNum for small vs small
+APInt is 17.00x faster than BigNum for large vs large
+BigNum is 1.50x faster than APInt for small vs large
+
+--- Operation: eq (binary) ---
+APInt:
+	small vs small: 4879239 ops/s
+	large vs large: 4330879 ops/s
+	small vs large: 4759638 ops/s
 BigNum:
-        Small vs Small: 4.614819
-        Large vs Large: 4.511340
-        Small vs Large: 4.349943
-APInt:
-        Small vs Small: 4.014869
-        Large vs Large: 4.149070
-        Small vs Large: 4.571776
+	small vs small: 1057865 ops/s
+	large vs large: 1064396 ops/s
+	small vs large: 1077180 ops/s
 
---- Operation: mod ---
+APInt is 4.61x faster than BigNum for small vs small
+APInt is 4.07x faster than BigNum for large vs large
+APInt is 4.42x faster than BigNum for small vs large
+
+--- Operation: lt (binary) ---
+APInt:
+	small vs small: 3952569 ops/s
+	large vs large: 3913894 ops/s
+	small vs large: 4359198 ops/s
 BigNum:
-        Small vs Small: 38.917940
-        Large vs Large: 170.684935
-        Small vs Large: 151.237867
-APInt:
-        Small vs Small: 17.904430
-        Large vs Large: 48.997882
-        Small vs Large: 17.95132
+	small vs small: 1005227 ops/s
+	large vs large: 997208 ops/s
+	small vs large: 946611 ops/s
 
---- Operation: div ---
+APInt is 3.93x faster than BigNum for small vs small
+APInt is 3.92x faster than BigNum for large vs large
+APInt is 4.61x faster than BigNum for small vs large
+
+--- Operation: pow (binary) ---
+APInt:
+	small base, small exponent: 44060 ops/s
 BigNum:
-        Small vs Small: 38.635471
-        Large vs Large: 175.193368
-        Small vs Large: 154.806465
-APInt:
-        Small vs Small: 17.391947
-        Large vs Large: 49.426132
-        Small vs Large: 17.59832
+	small base, small exponent: 16245 ops/s
 
---- Operation: eq ---
+APInt is 2.71x faster than BigNum for pow (small base, small exponent)
+
+--- Operation: unm (unary) ---
+APInt:
+	small: 4670715 ops/s
+	large: 3027092 ops/s
 BigNum:
-        Small vs Small: 1.018063
-        Large vs Large: 0.932092
-        Small vs Large: 0.97274199999993
-APInt:
-        Small vs Small: 0.236263
-        Large vs Large: 0.200374
-        Small vs Large: 0.21747000000005
+	small: 688848 ops/s
+	large: 660982 ops/s
 
---- Operation: .new (Creation) ---
-BigNum: 1.003874
-APInt:  0.009388
+APInt is 6.78x faster than BigNum for small
+APInt is 4.58x faster than BigNum for large
+
+--- Operation: tostr (unary) ---
+APInt:
+	small: 3295436 ops/s
+	large: 82904 ops/s
+BigNum:
+	small: 36614 ops/s
+	large: 2689 ops/s
+
+APInt is 90.00x faster than BigNum for small
+APInt is 30.83x faster than BigNum for large
+
+--- Operation: new (creation) ---
+APInt:
+	small: 1598721 ops/s
+	large: 210106 ops/s
+BigNum:
+	small: 114436 ops/s
+	large: 63 ops/s
+
+APInt is 13.97x faster than BigNum for creation (small)
+APInt is 3341.58x faster than BigNum for creation (large)
+
 
 --- Benchmarks Finished ---

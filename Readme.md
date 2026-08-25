@@ -1,66 +1,42 @@
-# A PInt 🍺: Arbitrary-Precision Integer Library for Lua (and Roblox)
+# APInt 🍺: Arbitrary-Precision Integer Library for Lua (and Roblox)
 
-<img src="./logo.png" width="256"/>
-
-**APInt** is an **A**rbitrary **P**recision **Int**eger library, built to calculate large numbers without losing a single bit of precision. 🔢
+**APInt** is an **A**rbitrary **P**recision **Int**eger library, built to calculate large numbers without losing precision.
 
 This library is engineered to be **effortlessly easy to use**, integrating as seamlessly as possible into existing Lua projects by **overloading standard arithmetic** metatables.
 
-## Features 🌟
+## Features
 
-*   **🧠 Arbitrary-Precision Integers**: Create and manipulate integers far larger than Lua's maximum int value.
+* **Arbitrary-Precision Integers**: Create and manipulate integers far larger than Lua's maximum integer limit.
 
-All standard arithmetic operators are overloaded:
-*   **➕ Operations**:
-    *   Addition (`+`)
-    *   Subtraction (`-`)
-    *   Multiplication (`*`)
-    *   Division (`/`) (floor division)
-    *   Modulo (`%`)
-    *   Exponentiation (`^`)
-    *   Unary Minus (`-`)
-*   **⚖️ Comparison Operators**:
-    *   Less Than (`<`)
-    *   Equality (`==`)
-    *   (Greater than, less than or equal to, etc., also work, inferred from `<` and `==`)
-*   **📜 String Conversion**: `tostring` method also works.
-* **⚙️ Additional Operations**:
-    *   **Bitwise-like Shifts**: Implemented for internal use (`__lsl` and `__lsr` are available in the source, though not aliased to `<<` or `>>` to maintain Lua 5.2 standards).
-    *   **🔧 Flexible Type Handling**: Configure the library to operate in different modes (`STRICT`, `WARNING`, `NOT-STRICT`) to manage operations with mixed `APInt` and standard number types.
 
-## Getting Started 🚀
+* **Overloaded Operators**: Supports `+`, `-`, `*`, `/`, `%`, `^`, unary `-`, `<`, and `==`.
 
-To use APInt 🍺, simply `require` the `APInt.lua` file in your project.
+
+* **String & Roblox Support**: Works natively with `tostring` and offers standard Wally/Roblox compatibility.
+
+
+
+## Getting Started
 
 ```lua
 local APInt = require("APInt")
+
+-- Create integers from numbers or strings
+local a = APInt(12345)
+local b = APInt("987654321098765432109876543210")
+
 ```
 
-If you're on **Roblox**: just make the library a ModuleScript and require it from a Local or Server Script.
+Installation:
 
-Or also on [wally (a roblox package manager)](https://wally.run/) thanks to [Vran-n](https://github.com/Vran-n)!
+* **Lua**: Place `APInt.lua` in your repository and call `require("APInt")`.
 
-[[APInt wally package]](https://wally.run/package/vran-n/apint)
+* **Roblox**: just make the library a ModuleScript and require it from a Local or Server Script.
 
-### Creating New Large Integers 🔢
+* **Wally**: Available [[here]](https://wally.run/package/vran-n/apint) on [Wally (a roblox package manager)](https://wally.run/) thanks to [Vran-n](https://github.com/Vran-n)!
 
-You can create new arbitrary-precision integers from a number, a string, or even another `APInt` object (a table of integers between `0` and `BASE`).
 
-```lua
--- From a number
-local a = APInt.new(12345)
-local b = APInt(98765) -- You can also call the library object directly!
-
--- From a string for massive numbers
-local very_large_number = APInt.new("123456789012345678901234567890")
-local another_large_one = APInt("987654321098765432109876543210")
-```
-
-## Usage Snippets 💡
-
-### Arithmetic Operations 🧮
-
-All the standard arithmetic operators work seemlessly as you'd expect.
+## Usage examples
 
 ```lua
 local APInt = require("APInt")
@@ -68,128 +44,66 @@ local APInt = require("APInt")
 local a = APInt("23456789012345678901")
 local b = APInt("98765432109876543210")
 
--- Addition
+-- Arithmetic & Comparisons
 local sum = a + b
-print("Sum:", sum)
+local diff = b - a
+local prod = APInt(2) ^ APInt(256)
+local div = a / b
+local is_less = a < b
 
--- Subtraction
-local difference = b - a
-print("Difference:", difference)
+-- String Conversion
+print("Result:")
+print(sum)
 
--- Multiplication
-local product = APInt(2)^APInt(256)
-print("Product:", product)
-
--- Division
-local quotient, remainder = a / b
-print("Quotient:", quotient)
-print("Remainder:", remainder)
-
--- Modulo
-local mod = b % a
-print("Modulo:", mod)
-
--- Exponentiation
-local power = APInt(5)^APInt(100)
-print("5^100:", power)
 ```
 
-### Comparisons 👀
+### Configuration
+
+Set standard or strict type checking via `APInt.MODE`:
+
+* **`"NOT-STRICT"`** (default): Automatically converts numbers to `APInt`.
 
 
-```lua
-local APInt = require("APInt")
+* **`"WARNING"`**: Converts numbers with a warning message.
 
-local a = APInt("100000000000000000000")
-local b = APInt("100000000000000000001")
 
-if a < b then
-    print("a is less than b")
-end
+* **`"STRICT"`**: Throws an error on non-`APInt` inputs.
 
-if a == a then
-    print("a is equal to itself")
-end
-```
 
-### String Conversion 🔄
 
-You can convert `APInt` objects to strings for printing or serialization.
-
-```lua
-local APInt = require("APInt")
-
-local large_number = APInt(2)^APInt(128)
-
--- Implicitly calls __tostring
-print("2^128 is: " .. large_number)
-
-local as_string = tostring(large_number)
-print(as_string)
-```
-
-### Configuration 🛠️
-
-You can tweak the library's mode for handling non-`APInt` types in operations.
-
-*   `"NOT-STRICT"` (default): Automatically converts numbers to `APInt`. ✅
-*   `"WARNING"`: Converts numbers but gives you a heads-up with a warning. ⚠️
-*   `"STRICT"`: Throws an error if an operation involves a non-`APInt` type. 🛑
-
-```lua
-local APInt = require("APInt")
-
-APInt.MODE = "STRICT"
-
-local a = APInt(100)
--- This will now throw an error instead of silently converting 50!
-local result = a + 50
-```
-
-## Performance Showdown 🏎️💨
+## Performance comparison!
 
 ### The Competitor
-APInt competes with the [BigNum](https://github.com/RoStrap/Math/blob/master/BigNum.lua) library by the great programmer [Validark](https://github.com/Validark). It has equal or better performance for correct results in Roblox Studio, which I am satisfied with!
+APInt competes with the [BigNum](https://github.com/RoStrap/Math/blob/master/BigNum.lua) library by the great programmer [Validark](https://github.com/Validark) which is the de-facto standard for the usecase.
 
-### Blazing-Fast Performance 🔥
+### Benchmarks
 
-The benchmark file is in the repository, so **you can test it** on your own machine! (You'll need the **BigNum** and **APInt** libraries in the same directory).
+The benchmarks are in the repository (alongside benchmark results), so **you can test it** on your own machine! (You'll need the **BigNum** and **APInt** libraries in the same directory).
 
-The results files are also in the repository: **"benchmark_results_computer"** for tests on **my computer™** and **"benchmark_results_studio"** for tests in **Roblox Studio**.
+Comparing **APInt** against **BigNum** across benchmark operations (ops/s):
 
-Here are some of the most egregious results:
-
-### 🖥️ Computer Benchmark
-| Operation | BigNum Time | APInt Time | Speedup |
-| :--- | :--- | :--- | :--- |
-| Creation (.new) | 1.003874 | 0.009388 | **~107x** |
-| Division (Large) | 175.193368 | 49.426132 | **~3.5x** |
-| Modulo (Large) | 170.684935 | 48.997882 | **~3.5x** |
-| To String (Large) | 152.764841 | 11.557140 | **~13.2x** |
-
-### 🕹️ Roblox Studio Benchmark
-| Operation | BigNum Time | APInt Time | Speedup |
-| :--- | :--- | :--- | :--- |
-| Creation (.new) | 0.166527 | 0.020295 | **~8.2x** |
-| Division (Large) | 6.890840 | 1.265368 | **~5.4x** |
-| Modulo (Large) | 7.019249 | 1.278361 | **~5.5x** |
-| To String (Large) | 6.511121 | 0.333968 | **~19.5x** |
+| Operation | Workload | APInt (ops/s) | BigNum (ops/s) | Speedup |
+| --- | --- | --- | --- | --- |
+| **Creation (.new)** | Large | 210,106 | 63 | **3,341.58x faster** |
+| **To String (tostr)** | Small | 3,295,436 | 36,614 | **90.00x faster** |
+| **To String (tostr)** | Large | 82,904 | 2,689 | **30.83x faster** |
+| **Division (/)** | Large vs Large | 185,822 | 10,349 | **17.96x faster** |
 
 ## More Info ℹ️
 
 ### Implementation Details
-The numbers are stored as a table (array) of numbers in base `2^52` by default, with the last number also storing the sign. This structure takes advantage of Lua's [float64](https://en.wikipedia.org/wiki/Double-precision_floating-point_format) number type without sacrificing precision. The table is variable-sized, and every number is immutable. The algorithms used are linked in the source code!
+The numbers are stored as a table (array) of numbers in base `2^52` by default, with the last number also storing the sign. This structure takes advantage of Lua's [float64](https://en.wikipedia.org/wiki/Double-precision_floating-point_format) number type without sacrificing precision. The table is variable-sized, and every number is immutable.
 
 ### Testing
 
-The library is unit-tested using [Busted](https://github.com/lunarmodules/busted) in `test.lua`. It runs as a standalone file with Lua 5.2 (with Busted installed).
+The library is unit-tested using LuaUnit (`test.lua`) and automated randomized correctness checks.
 
 ### Additional info
 
-- This library aims to replicate the simplicity and elegance of how [Python](https://github.com/python/cpython) handles big integers. 🐍
+- This library aims to replicate the simplicity and elegance of how [Python](https://github.com/python/cpython) handles big integers.
 - I implemented [karatsuba's algorithm](https://en.wikipedia.org/wiki/Karatsuba_algorithm) for multiplication ([and division](https://www.researchgate.net/publication/2649773_Practical_Integer_Division_with_Karatsuba_Complexity)) but the performance was worse even for big numbers so it got cut in the final release.
-- My favourite beer is Guinness
+- My favourite beer was Guinness (I don't drink anymore)
 
-### Missing Features (Feel free to fork! 🍴)
+### Missing Features (Feel free to fork!)
 
 -   The library was built for Roblox games but doesn't yet leverage Roblox's `buffer` library, which could be faster.

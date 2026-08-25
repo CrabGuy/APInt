@@ -15,18 +15,22 @@ if type(task) == "table" and type(task.wait) == "function" then
 end
 
 local config = {
-    num_small_values = 1000,
-    num_large_values = 500,
-    num_creation_values = 1000,
-    small_digits_max = 5,
-    large_digits_max = 50,
-    ops_per_binary = 50000,
-    ops_per_unary = 50000,
-    ops_per_pow = 500,
+    num_small_values = 5000,
+    num_large_values = 5000,
+
+    ops_per_binary = 20000,
+    ops_per_unary = 20000,
+    ops_per_pow = 10000,
+    num_creation_values = 2000,
+
     chunk_size = 1000,
     pow_chunk_size = 50,
     creation_chunk_size = 100,
-    iterations = 10
+
+    small_digits_max = 5,
+    large_digits_max = 50,
+
+    iterations = 25
 }
 
 local pow_exponent_values = { 0, 1, 2, 3, 4, 5, 10, 20, 50, 100 }
