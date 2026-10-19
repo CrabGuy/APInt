@@ -1,630 +1,676 @@
 --!native
+--!optimize 2
+
+--[[
+	APInt: arbitrary precision integers for Lua 5.2 and Luau (Roblox).
+
+	A number is an immutable array of digits in base 2^52, least significant digit first.
+	The sign is stored on the most significant digit: every other digit is in [0, 2^52)
+	and the last one is in (-2^52, 2^52). Numbers are always normalized, so the last
+	digit is only 0 for zero itself, which is {0}.
+
+	Lua numbers are doubles, which hold every integer below 2^53 exactly. Base 2^52 is
+	the largest base where adding two digits and a carry stays below that limit. Products
+	of two digits need 104 bits, so multiplication and division split digits into 26-bit
+	halves (HALF) whose products are exact, and assemble the full product from those.
+]]
 
 local APInt = {}
 local APInt_metatable = {}
-APInt.__index = APInt
 
-local math_abs = math.abs
 local math_floor = math.floor
-local math_log10 = math.log10
-local math_max = math.max
-local table_insert = table.insert
-local table_concat = table.concat
 local string_format = string.format
-local string_sub = string.sub
 local string_match = string.match
+local string_sub = string.sub
+local table_concat = table.concat
+local getmetatable = getmetatable
+local setmetatable = setmetatable
 local tonumber = tonumber
 local type = type
-local setmetatable = setmetatable
-local getmetatable = getmetatable
-local unpack = unpack or table.unpack
+local warn_user = warn or function(message)
+	print("Warning: " .. message)
+end
 
-local POWER = 52
-local BASE = 2^POWER
-local SPLIT_BASE = 2^(POWER / 2)
+local BASE = 2^52
+local HALF = 2^26 -- HALF * HALF == BASE
+local SAFE_LIMIT = 2^53 -- every integer with a smaller magnitude is exact as a double
+
+-- String conversion works in chunks of 8 decimal digits. CHUNK * HALF < 2^53 keeps
+-- the in-place chunk multiplication and division exact.
+local CHUNK = 10^8
+local CHUNK_DIGITS = 8
+local MAX_SINGLE_DIGIT_LENGTH = 15 -- any 15 digit decimal is below BASE
+
+-- Multiplying numbers with at least this many digits uses Karatsuba's algorithm.
+local KARATSUBA_THRESHOLD = 32
+
 APInt.BASE = BASE
 APInt.MODE = "NOT-STRICT"
-local PRELOADED = {}
 
-for i = -5, 256 do
-	PRELOADED[i] = setmetatable({ i }, APInt_metatable)
+if _VERSION ~= "Lua 5.2" and _VERSION ~= "Luau" then
+	warn_user("You are using an unsupported version of Lua for this library. If it's 5.2+, it should still work.")
 end
 
-local supported_versions = { "Lua 5.2", "Luau" }
-local supported = false
-for _, version in pairs(supported_versions) do
-	if version == _VERSION then
-		supported = true
-		break
-	end
-end
-if not supported then
-	warn("You are using an unsupported version of Lua for this library. If it's 5.2+, it should still work.")
-end
+--------------------------------------------------------------------------------
+-- Magnitude kernels
+--
+-- These work on plain arrays of non-negative digits with explicit lengths. Kernels
+-- that build a result return a new array together with its length and never modify
+-- their inputs. The ones marked "in place" only ever modify private working arrays.
+--------------------------------------------------------------------------------
 
-assert(POWER % 2 == 0, "POWER must be an even number for multiplication to work properly")
-
-local TOSTRING_DIVISOR_DIGITS = math_floor(math_log10(BASE))
-local TOSTRING_DIVISOR = nil
-local PADDING_FORMAT = "%0" .. TOSTRING_DIVISOR_DIGITS .. ".0f"
-
-local BASE_26 = SPLIT_BASE
-
-local function split_mul(a, b)
-	local a_hi = math_floor(a / SPLIT_BASE)
-	local a_lo = a % SPLIT_BASE
-	local b_hi = math_floor(b / SPLIT_BASE)
-	local b_lo = b % SPLIT_BASE
-
-	local cross = a_hi * b_lo + a_lo * b_hi
-	local cross_hi = math_floor(cross / SPLIT_BASE)
-	local cross_lo = cross % SPLIT_BASE
-
-	local low = cross_lo * SPLIT_BASE + a_lo * b_lo
-	local carry1 = math_floor(low / BASE)
-	local total_low = low % BASE
-	local total_high = a_hi * b_hi + cross_hi + carry1
-
-	return total_low, total_high
-end
-
-local function __remove_trailing_zeros(digits)
-	local n = #digits
-	while n > 1 and digits[n] == 0 do
+-- Removes zero digits from the top of the n-digit array r, returning its new length.
+local function trim(r, n)
+	while n > 1 and r[n] == 0 do
+		r[n] = nil
 		n = n - 1
 	end
-	if n == #digits then
-		return digits
-	end
-	local new_digits = {}
-	for i = 1, n do
-		new_digits[i] = digits[i]
-	end
-	return new_digits
+	return n
 end
 
-local function __sign(x)
-	return (x[#x] >= 0 and 1) or -1
+-- Copies digits first..last of a into a new array.
+local function slice(a, first, last)
+	local r = {}
+	for i = first, last do
+		r[i - first + 1] = a[i]
+	end
+	return r, trim(r, last - first + 1)
 end
 
-local function __abs_mag(x)
-	local t = {}
-	local n = #x
-	for i = 1, n - 1 do
-		t[i] = x[i]
+-- Returns -1, 0 or 1 as |a| is smaller than, equal to or larger than |b|.
+local function compare_magnitudes(a, na, b, nb)
+	if na ~= nb then
+		return na < nb and -1 or 1
 	end
-	t[n] = math_abs(x[n])
-	return t
+	for i = na, 1, -1 do
+		local x, y = a[i], b[i]
+		if x ~= y then
+			return x < y and -1 or 1
+		end
+	end
+	return 0
 end
 
-local function __from_mag(mag, sign)
-	mag = __remove_trailing_zeros(mag)
-	if mag[#mag] == 0 then
-		return PRELOADED[0]
+-- |a| + |b|
+local function add_magnitudes(a, na, b, nb)
+	if na < nb then
+		a, na, b, nb = b, nb, a, na
 	end
-	if sign == -1 then
-		mag[#mag] = -mag[#mag]
-	end
-	return setmetatable(mag, APInt_metatable)
-end
-
-local function mag_add(a, b)
-	local max_len = math_max(#a, #b)
-	local digits = {}
+	local r = {}
 	local carry = 0
-	for i = 1, max_len do
-		local sum = (a[i] or 0) + (b[i] or 0) + carry
+	for i = 1, nb do
+		local sum = a[i] + b[i] + carry
 		if sum >= BASE then
-			digits[i] = sum - BASE
+			r[i] = sum - BASE
 			carry = 1
 		else
-			digits[i] = sum
+			r[i] = sum
 			carry = 0
 		end
 	end
-	if carry ~= 0 then
-		digits[max_len + 1] = carry
+	for i = nb + 1, na do
+		local sum = a[i] + carry
+		if sum >= BASE then
+			r[i] = sum - BASE
+			carry = 1
+		else
+			r[i] = sum
+			carry = 0
+		end
 	end
-	return digits
+	if carry == 0 then
+		return r, na
+	end
+	r[na + 1] = carry
+	return r, na + 1
 end
 
-local function mag_sub(a, b)
-	local digits = {}
+-- |a| - |b|, which requires |a| >= |b|.
+local function subtract_magnitudes(a, na, b, nb)
+	local r = {}
 	local borrow = 0
-	for i = 1, #a do
-		local sub = a[i] - (b[i] or 0) - borrow
-		if sub < 0 then
-			sub = sub + BASE
+	for i = 1, nb do
+		local difference = a[i] - b[i] - borrow
+		if difference < 0 then
+			r[i] = difference + BASE
 			borrow = 1
 		else
+			r[i] = difference
 			borrow = 0
 		end
-		digits[i] = sub
 	end
-	return digits
-end
-
-local function mag_lt(a, b)
-	if #a ~= #b then
-		return #a < #b
-	end
-	for i = #a, 1, -1 do
-		if a[i] ~= b[i] then
-			return a[i] < b[i]
+	for i = nb + 1, na do
+		local difference = a[i] - borrow
+		if difference < 0 then
+			r[i] = difference + BASE
+			borrow = 1
+		else
+			r[i] = difference
+			borrow = 0
 		end
 	end
-	return false
+	return r, trim(r, na)
 end
 
-local function mag_eq(a, b)
-	if #a ~= #b then
-		return false
-	end
-	for i = 1, #a do
-		if a[i] ~= b[i] then
-			return false
-		end
-	end
-	return true
-end
-
-local function mag_lt_abs(a, b)
-	if #a ~= #b then
-		return #a < #b
-	end
-	for i = #a, 1, -1 do
-		local va = (i == #a) and math_abs(a[i]) or a[i]
-		local vb = (i == #b) and math_abs(b[i]) or b[i]
-		if va ~= vb then
-			return va < vb
-		end
-	end
-	return false
-end
-
-local function to_base26(a)
-	local res = {}
-	for i = 1, #a do
-		local d = a[i]
-		local high = math_floor(d / SPLIT_BASE)
-		local low = d % SPLIT_BASE
-		table_insert(res, low)
-		table_insert(res, high)
-	end
-	return __remove_trailing_zeros(res)
-end
-
-local function from_base26(a)
-	local res = {}
-	for i = 1, #a, 2 do
-		local low = a[i] or 0
-		local high = a[i + 1] or 0
-		table_insert(res, high * SPLIT_BASE + low)
-	end
-	return __remove_trailing_zeros(res)
-end
-
-local function mag_mul_base26(a, b)
-	local result = {}
-	for i = 1, #a do
-		local carry = 0
-		for j = 1, #b do
-			local pos = i + j - 1
-			local cur = (result[pos] or 0) + a[i] * b[j] + carry
-			result[pos] = cur % BASE_26
-			carry = math_floor(cur / BASE_26)
-		end
-		local pos = i + #b
-		while carry > 0 do
-			local cur = (result[pos] or 0) + carry
-			result[pos] = cur % BASE_26
-			carry = math_floor(cur / BASE_26)
-			pos = pos + 1
-		end
-	end
-	return __remove_trailing_zeros(result)
-end
-
-local function mag_mul(a, b)
-	local a26 = to_base26(a)
-	local b26 = to_base26(b)
-	local prod26 = mag_mul_base26(a26, b26)
-	return from_base26(prod26)
-end
-
-local function mag_div_small_2(a)
-	local q = {}
-	local rem = 0
-	for i = #a, 1, -1 do
-		local cur = rem * BASE + a[i]
-		q[i] = math_floor(cur / 2)
-		rem = cur % 2
-	end
-	return __remove_trailing_zeros(q), { rem }
-end
-
-local function mag_div_small_base26(a, d)
-	local q = {}
-	local r = 0
-	for i = #a, 1, -1 do
-		local cur = r * BASE_26 + a[i]
-		q[i] = math_floor(cur / d)
-		r = cur % d
-	end
-	return __remove_trailing_zeros(q), { r }
-end
-
-local function mag_div_base26(a, b)
-	if #b == 1 then
-		return mag_div_small_base26(a, b[1])
-	end
-
-	local u = {}
-	for i = #a, 1, -1 do
-		u[#u + 1] = a[i]
-	end
-
-	local v = {}
-	for i = #b, 1, -1 do
-		v[#v + 1] = b[i]
-	end
-
-	if #u < #v then
-		return { 0 }, a
-	end
-
-	local n = #v
-	local d = math_floor(BASE_26 / (v[1] + 1))
-
-	local u_norm = {}
+-- Adds the n-digit array src into dst starting at dst[offset], in place.
+-- dst must be long enough to absorb the final carry.
+local function add_into(dst, offset, src, n)
 	local carry = 0
-	for i = #u, 1, -1 do
-		local val = u[i] * d + carry
-		u_norm[i] = val % BASE_26
-		carry = math_floor(val / BASE_26)
-	end
-	if carry > 0 then
-		table_insert(u_norm, 1, carry)
-	end
-
-	local v_norm = {}
-	carry = 0
-	for i = #v, 1, -1 do
-		local val = v[i] * d + carry
-		v_norm[i] = val % BASE_26
-		carry = math_floor(val / BASE_26)
-	end
-	if carry > 0 then
-		table_insert(v_norm, 1, carry)
-	end
-
-	table_insert(u_norm, 1, 0)
-	n = #v_norm
-	local m = #u_norm - n - 1
-	local q = {}
-
-	for j = 1, m + 1 do
-		local uj = u_norm[j] or 0
-		local uj1 = u_norm[j + 1] or 0
-		local qhat = math_floor((uj * BASE_26 + uj1) / v_norm[1])
-		local rhat = (uj * BASE_26 + uj1) % v_norm[1]
-
-		while qhat >= BASE_26 or (n > 1 and qhat * v_norm[2] > BASE_26 * rhat + (u_norm[j + 2] or 0)) do
-			qhat = qhat - 1
-			rhat = rhat + v_norm[1]
-			if rhat >= BASE_26 then
-				break
-			end
-		end
-
-		local borrow = 0
-		for i = n, 1, -1 do
-			local p = qhat * v_norm[i] + borrow
-			local sub = (u_norm[j + i] or 0) - (p % BASE_26)
-			if sub < 0 then
-				u_norm[j + i] = sub + BASE_26
-				borrow = math_floor(p / BASE_26) + 1
-			else
-				u_norm[j + i] = sub
-				borrow = math_floor(p / BASE_26)
-			end
-		end
-
-		local total = (u_norm[j] or 0) - borrow
-		if total < 0 then
-			qhat = qhat - 1
-			local carry_add = 0
-			for i = n, 1, -1 do
-				local sum = (u_norm[j + i] or 0) + v_norm[i] + carry_add
-				u_norm[j + i] = sum % BASE_26
-				carry_add = math_floor(sum / BASE_26)
-			end
-			u_norm[j] = ((u_norm[j] or 0) + carry_add) % BASE_26
-		else
-			u_norm[j] = total
-		end
-
-		q[j] = qhat
-	end
-
-	local q_little = {}
-	for i = #q, 1, -1 do
-		q_little[#q_little + 1] = q[i]
-	end
-
-	local rem_big = {}
-	for i = m + 2, m + n + 1 do
-		rem_big[#rem_big + 1] = u_norm[i]
-	end
-
-	local rem_little = {}
-	for i = #rem_big, 1, -1 do
-		rem_little[#rem_little + 1] = rem_big[i]
-	end
-
-	local rem_norm = __remove_trailing_zeros(rem_little)
-	local remainder, _ = mag_div_small_base26(rem_norm, d)
-
-	return __remove_trailing_zeros(q_little), remainder
-end
-
-local function mag_div(a, b)
-	local a26 = to_base26(a)
-	local b26 = to_base26(b)
-	local q26, r26 = mag_div_base26(a26, b26)
-	return from_base26(q26), from_base26(r26)
-end
-
-local function is_big_int(x)
-	return type(x) == "table" and getmetatable(x) == APInt_metatable
-end
-
-APInt.__is_big_int = is_big_int
-
-local function __abs(x)
-	if x[#x] >= 0 then
-		return x
-	end
-	local n = #x
-	if n == 1 and PRELOADED[-x[1]] then
-		return PRELOADED[-x[1]]
-	end
-	local t = {}
+	local k = offset
 	for i = 1, n do
-		t[i] = x[i]
+		local sum = dst[k] + src[i] + carry
+		if sum >= BASE then
+			dst[k] = sum - BASE
+			carry = 1
+		else
+			dst[k] = sum
+			carry = 0
+		end
+		k = k + 1
 	end
-	t[n] = math_abs(t[n])
-	return setmetatable(t, APInt_metatable)
+	while carry ~= 0 do
+		local sum = dst[k] + carry
+		if sum >= BASE then
+			dst[k] = sum - BASE
+		else
+			dst[k] = sum
+			carry = 0
+		end
+		k = k + 1
+	end
 end
 
-local function __unm(x)
-	if x[#x] == 0 then
-		return PRELOADED[0]
-	end
-	local n = #x
-	if n == 1 and PRELOADED[-x[1]] then
-		return PRELOADED[-x[1]]
-	end
-	local t = {}
+-- Returns an array of n zeros.
+local function zeros(n)
+	local r = {}
 	for i = 1, n do
-		t[i] = x[i]
-	end
-	t[n] = -t[n]
-	return setmetatable(t, APInt_metatable)
-end
-
-local function __add(a, b)
-	if #a == 1 and #b == 1 then
-		local sum = a[1] + b[1]
-		if sum == 0 then
-			return PRELOADED[0]
-		end
-		if PRELOADED[sum] then
-			return PRELOADED[sum]
-		end
-		if sum > 0 then
-			if sum < BASE then
-				return setmetatable({ sum }, APInt_metatable)
-			else
-				local low = sum % BASE
-				local high = math_floor(sum / BASE)
-				return setmetatable({ low, high }, APInt_metatable)
-			end
-		else
-			local m = -sum
-			if PRELOADED[-m] then
-				return PRELOADED[-m]
-			end
-			if m < BASE then
-				return setmetatable({ -m }, APInt_metatable)
-			else
-				local low = m % BASE
-				local high = math_floor(m / BASE)
-				return setmetatable({ low, -high }, APInt_metatable)
-			end
-		end
-	end
-
-	local sign_a = __sign(a)
-	local sign_b = __sign(b)
-	local mag_a = sign_a == 1 and a or __abs_mag(a)
-	local mag_b = sign_b == 1 and b or __abs_mag(b)
-
-	if sign_a == sign_b then
-		return __from_mag(mag_add(mag_a, mag_b), sign_a)
-	else
-		if mag_eq(mag_a, mag_b) then
-			return PRELOADED[0]
-		end
-		if mag_lt(mag_a, mag_b) then
-			return __from_mag(mag_sub(mag_b, mag_a), sign_b)
-		else
-			return __from_mag(mag_sub(mag_a, mag_b), sign_a)
-		end
-	end
-end
-
-local function __sub(a, b)
-	return __add(a, __unm(b))
-end
-
-local function __mul(a, b)
-	if a == PRELOADED[0] or b == PRELOADED[0] then
-		return PRELOADED[0]
-	end
-
-	if #a == 1 and #b == 1 then
-		local va = a[1]
-		local vb = b[1]
-		local sign = 1
-		if va < 0 then
-			sign = -sign
-			va = -va
-		end
-		if vb < 0 then
-			sign = -sign
-			vb = -vb
-		end
-
-		local low, high = split_mul(va, vb)
-		if low == 0 and high == 0 then
-			return PRELOADED[0]
-		end
-
-		if high == 0 then
-			if sign == -1 then
-				low = -low
-			end
-			return setmetatable({ low }, APInt_metatable)
-		else
-			if sign == -1 then
-				high = -high
-			end
-			return setmetatable({ low, high }, APInt_metatable)
-		end
-	end
-
-	local sign_a = __sign(a)
-	local sign_b = __sign(b)
-	local mag_a = sign_a == 1 and a or __abs_mag(a)
-	local mag_b = sign_b == 1 and b or __abs_mag(b)
-	local mag = mag_mul(mag_a, mag_b)
-
-	return __from_mag(mag, sign_a * sign_b)
-end
-
-local function __div(a, b)
-	assert(b ~= PRELOADED[0], "Division by 0")
-
-	if #a == 1 and #b == 1 then
-		local va = a[1]
-		local vb = b[1]
-		local q_sign = 1
-		local abs_a = math_abs(va)
-		local abs_b = math_abs(vb)
-
-		local q = math_floor(abs_a / abs_b)
-		local r = abs_a % abs_b
-
-		if va < 0 then
-			q_sign = -q_sign
-		end
-		if vb < 0 then
-			q_sign = -q_sign
-		end
-
-		local q_val = q
-		if q_sign == -1 then
-			q_val = -q
-		end
-
-		local q_apint
-		if q_val == 0 then
-			q_apint = PRELOADED[0]
-		elseif PRELOADED[q_val] then
-			q_apint = PRELOADED[q_val]
-		else
-			q_apint = setmetatable({ q_val }, APInt_metatable)
-		end
-
-		local r_apint
-		if r == 0 then
-			r_apint = PRELOADED[0]
-		elseif PRELOADED[r] then
-			r_apint = PRELOADED[r]
-		else
-			r_apint = setmetatable({ r }, APInt_metatable)
-		end
-
-		return q_apint, r_apint
-	end
-
-	local sign_a = __sign(a)
-	local sign_b = __sign(b)
-	local mag_a = sign_a == 1 and a or __abs_mag(a)
-	local mag_b = sign_b == 1 and b or __abs_mag(b)
-	local q_mag, r_mag = mag_div(mag_a, mag_b)
-
-	return __from_mag(q_mag, sign_a * sign_b), __from_mag(r_mag, 1)
-end
-
-local function __mod(a, b)
-	assert(b ~= PRELOADED[0], "Modulo by 0")
-	local _, r = __div(a, b)
-	if __sign(a) == -1 and r ~= PRELOADED[0] then
-		r = __sub(__abs(b), r)
+		r[i] = 0
 	end
 	return r
 end
 
-local function div_small_2_apint(x)
-	local q_mag, r_mag = mag_div_small_2(x)
-	return __from_mag(q_mag, 1), __from_mag(r_mag, 1)
+-- |a| * |b| with the schoolbook method. Each digit is split into 26-bit halves so the
+-- four partial products stay exact and add up to the full 104-bit digit product.
+local function multiply_schoolbook(a, na, b, nb)
+	local r = zeros(na + nb)
+	for i = 1, na do
+		local digit = a[i]
+		if digit ~= 0 then
+			local a_low = digit % HALF
+			local a_high = (digit - a_low) / HALF
+			local carry = 0
+			local k = i
+			for j = 1, nb do
+				local other = b[j]
+				local b_low = other % HALF
+				local b_high = (other - b_low) / HALF
+				local middle = a_low * b_high + a_high * b_low
+				local middle_low = middle % HALF
+				local low = a_low * b_low + middle_low * HALF
+				local high = a_high * b_high + (middle - middle_low) / HALF
+				-- digit * other == high * BASE + low; fold in r[k] and the carry one at a time
+				if low >= BASE then
+					low = low - BASE
+					high = high + 1
+				end
+				low = low + r[k]
+				if low >= BASE then
+					low = low - BASE
+					high = high + 1
+				end
+				low = low + carry
+				if low >= BASE then
+					low = low - BASE
+					high = high + 1
+				end
+				r[k] = low
+				carry = high
+				k = k + 1
+			end
+			r[k] = carry
+		end
+	end
+	return r, trim(r, na + nb)
 end
 
-local function __pow(a, b)
-	if b < PRELOADED[0] then
-		assert(a ~= PRELOADED[0], "Negative power of 0")
-		if a == PRELOADED[1] then
-			return PRELOADED[1]
+local multiply_magnitudes
+
+-- |a| * |b| with Karatsuba's algorithm, for na >= nb > na / 2. Splitting both numbers
+-- at m digits as a = a1 * BASE^m + a0 and b = b1 * BASE^m + b0 gives
+-- a * b = z2 * BASE^2m + (z1 - z2 - z0) * BASE^m + z0, with z0 = a0 * b0,
+-- z2 = a1 * b1 and z1 = (a0 + a1) * (b0 + b1): three multiplications instead of four.
+local function multiply_karatsuba(a, na, b, nb)
+	local m = math_floor(na / 2)
+	local a0, na0 = slice(a, 1, m)
+	local a1, na1 = slice(a, m + 1, na)
+	local b0, nb0 = slice(b, 1, m)
+	local b1, nb1 = slice(b, m + 1, nb)
+
+	local z0, nz0 = multiply_magnitudes(a0, na0, b0, nb0)
+	local z2, nz2 = multiply_magnitudes(a1, na1, b1, nb1)
+	local sum_a, nsum_a = add_magnitudes(a0, na0, a1, na1)
+	local sum_b, nsum_b = add_magnitudes(b0, nb0, b1, nb1)
+	local z1, nz1 = multiply_magnitudes(sum_a, nsum_a, sum_b, nsum_b)
+	z1, nz1 = subtract_magnitudes(z1, nz1, z0, nz0)
+	z1, nz1 = subtract_magnitudes(z1, nz1, z2, nz2)
+
+	local r = zeros(na + nb)
+	for i = 1, nz0 do
+		r[i] = z0[i]
+	end
+	for i = 1, nz2 do
+		r[2 * m + i] = z2[i]
+	end
+	add_into(r, m + 1, z1, nz1)
+	return r, trim(r, na + nb)
+end
+
+-- |a| * |b| for a much longer than b: multiplies b by each nb-digit block of a.
+local function multiply_unbalanced(a, na, b, nb)
+	local r = zeros(na + nb)
+	for first = 1, na, nb do
+		local last = first + nb - 1
+		if last > na then
+			last = na
 		end
-		return PRELOADED[0]
+		local block, nblock = slice(a, first, last)
+		local product, nproduct = multiply_magnitudes(block, nblock, b, nb)
+		add_into(r, first, product, nproduct)
 	end
+	return r, trim(r, na + nb)
+end
 
-	if b == PRELOADED[0] then
-		return PRELOADED[1]
+-- |a| * |b|, picking the fastest method for the sizes involved.
+function multiply_magnitudes(a, na, b, nb)
+	if na < nb then
+		a, na, b, nb = b, nb, a, na
 	end
+	if nb < KARATSUBA_THRESHOLD then
+		return multiply_schoolbook(a, na, b, nb)
+	end
+	if 2 * nb <= na then
+		return multiply_unbalanced(a, na, b, nb)
+	end
+	return multiply_karatsuba(a, na, b, nb)
+end
 
-	local result = PRELOADED[1]
-	local base = a
-	local exp = b
-
-	while exp > PRELOADED[0] do
-		local q, r = div_small_2_apint(exp)
-		if r == PRELOADED[1] then
-			result = __mul(result, base)
+-- Subtracts multiplier * v (nv digits, multiplier < BASE) from w[offset .. offset + nv]
+-- in place. The top digit w[offset + nv] goes negative if the result is negative.
+local function subtract_multiple(w, offset, v, nv, multiplier)
+	local m_low = multiplier % HALF
+	local m_high = (multiplier - m_low) / HALF
+	local borrow = 0
+	local k = offset
+	for i = 1, nv do
+		local digit = v[i]
+		local v_low = digit % HALF
+		local v_high = (digit - v_low) / HALF
+		local middle = m_low * v_high + m_high * v_low
+		local middle_low = middle % HALF
+		local low = m_low * v_low + middle_low * HALF
+		local high = m_high * v_high + (middle - middle_low) / HALF
+		if low >= BASE then
+			low = low - BASE
+			high = high + 1
 		end
-		base = __mul(base, base)
-		exp = q
+		local difference = w[k] - low - borrow
+		local result = difference % BASE
+		w[k] = result
+		borrow = high + (result - difference) / BASE
+		k = k + 1
+	end
+	w[k] = w[k] - borrow
+end
+
+-- Adds v (nv digits) to w[offset .. offset + nv] in place.
+local function add_back(w, offset, v, nv)
+	local carry = 0
+	local k = offset
+	for i = 1, nv do
+		local sum = w[k] + v[i] + carry
+		if sum >= BASE then
+			w[k] = sum - BASE
+			carry = 1
+		else
+			w[k] = sum
+			carry = 0
+		end
+		k = k + 1
+	end
+	w[k] = w[k] + carry
+end
+
+-- Whether the window w[offset .. offset + nv] is smaller than v (nv digits).
+local function window_less_than(w, offset, v, nv)
+	local top = w[offset + nv]
+	if top ~= 0 then
+		return top < 0
+	end
+	for i = nv, 1, -1 do
+		local x, y = w[offset + i - 1], v[i]
+		if x ~= y then
+			return x < y
+		end
+	end
+	return false
+end
+
+-- Long division of |u| by |v| (v nonzero). Returns quotient, its length, remainder, its length.
+--
+-- This is schoolbook long division with one base 2^52 digit of quotient per step. Each
+-- quotient digit is estimated with floating point division of the leading digits, which
+-- is off by at most a few units, and then corrected exactly: added back while the partial
+-- remainder is negative, and subtracted again while it is still at least v.
+local function divide_magnitudes(u, nu, v, nv)
+	if nu < nv then
+		local r, nr = slice(u, 1, nu)
+		return { 0 }, 1, r, nr
 	end
 
+	-- w holds the running remainder; one extra zero digit on top keeps every window nv + 1 long
+	local w = slice(u, 1, nu)
+	w[nu + 1] = 0
+	local divisor = v[nv] + (nv > 1 and v[nv - 1] / BASE or 0)
+	local q = {}
+
+	for j = nu - nv + 1, 1, -1 do
+		local top = j + nv
+		local estimate = math_floor((w[top] * BASE + w[top - 1]) / divisor)
+		if estimate >= BASE then
+			estimate = BASE - 1
+		end
+		if estimate > 0 then
+			subtract_multiple(w, j, v, nv, estimate)
+		end
+		while w[top] < 0 do
+			add_back(w, j, v, nv)
+			estimate = estimate - 1
+		end
+		while not window_less_than(w, j, v, nv) do
+			subtract_multiple(w, j, v, nv, 1)
+			estimate = estimate + 1
+		end
+		q[j] = estimate
+	end
+
+	local r, nr = slice(w, 1, nv)
+	return q, trim(q, nu - nv + 1), r, nr
+end
+
+-- Divides the n-digit array digits by divisor (< 2^27) in place and returns the remainder.
+-- Each digit is processed as two 26-bit halves so every intermediate value stays exact.
+local function divide_small_in_place(digits, n, divisor)
+	local remainder = 0
+	for i = n, 1, -1 do
+		local digit = digits[i]
+		local low = digit % HALF
+		local high_part = remainder * HALF + (digit - low) / HALF
+		local high_remainder = high_part % divisor
+		local low_part = high_remainder * HALF + low
+		remainder = low_part % divisor
+		digits[i] = (high_part - high_remainder) / divisor * HALF + (low_part - remainder) / divisor
+	end
+	return remainder
+end
+
+-- Sets the n-digit array digits to digits * multiplier + addend in place, where
+-- multiplier and addend are below 2^27, and returns the new length.
+local function multiply_add_small_in_place(digits, n, multiplier, addend)
+	local carry = addend
+	for i = 1, n do
+		local digit = digits[i]
+		local low = digit % HALF
+		local low_part = low * multiplier + carry
+		local low_digit = low_part % HALF
+		local high_part = (digit - low) / HALF * multiplier + (low_part - low_digit) / HALF
+		local high_digit = high_part % HALF
+		digits[i] = high_digit * HALF + low_digit
+		carry = (high_part - high_digit) / HALF
+	end
+	if carry > 0 then
+		n = n + 1
+		digits[n] = carry
+	end
+	return n
+end
+
+--------------------------------------------------------------------------------
+-- Building APInt values
+--------------------------------------------------------------------------------
+
+-- Numbers are immutable, so small values are created once and shared.
+local SMALL_MIN, SMALL_MAX = -5, 256
+local SMALL_INTEGERS = {}
+for i = SMALL_MIN, SMALL_MAX do
+	SMALL_INTEGERS[i] = setmetatable({ i }, APInt_metatable)
+end
+local ZERO = SMALL_INTEGERS[0]
+local ONE_DIGITS = { 1 }
+
+local function is_apint(x)
+	return getmetatable(x) == APInt_metatable
+end
+
+-- Wraps a single digit (|value| < BASE) as an APInt.
+local function from_digit(value)
+	if value == 0 then
+		return ZERO -- also turns -0 into 0
+	end
+	if SMALL_MIN <= value and value <= SMALL_MAX then
+		return SMALL_INTEGERS[value]
+	end
+	return setmetatable({ value }, APInt_metatable)
+end
+
+-- Wraps an integer with |value| < 2^53, which may need a second digit.
+local function from_small_integer(value)
+	if -BASE < value and value < BASE then
+		return from_digit(value)
+	end
+	local size = value < 0 and -value or value
+	local low = size % BASE
+	local high = (size - low) / BASE
+	return setmetatable({ low, value < 0 and -high or high }, APInt_metatable)
+end
+
+-- Turns a new, trimmed n-digit magnitude array into an APInt with the given sign.
+local function from_magnitude(r, n, negative)
+	if n == 1 then
+		return from_digit(negative and -r[1] or r[1])
+	end
+	if negative then
+		r[n] = -r[n]
+	end
+	return setmetatable(r, APInt_metatable)
+end
+
+-- Copies the digits of x (n digits) without the sign.
+local function copy_magnitude(x, n)
+	local r = {}
+	for i = 1, n - 1 do
+		r[i] = x[i]
+	end
+	local top = x[n]
+	r[n] = top < 0 and -top or top
+	return r
+end
+
+-- The digits of |x|: x itself when it is not negative, a copy otherwise.
+local function magnitude(x, n)
+	if x[n] >= 0 then
+		return x
+	end
+	return copy_magnitude(x, n)
+end
+
+local function is_zero(r, n)
+	return n == 1 and r[1] == 0
+end
+
+--------------------------------------------------------------------------------
+-- Arithmetic
+--------------------------------------------------------------------------------
+
+local function negate(x)
+	local n = #x
+	if n == 1 then
+		return from_digit(-x[1])
+	end
+	local r = {}
+	for i = 1, n - 1 do
+		r[i] = x[i]
+	end
+	r[n] = -x[n]
+	return setmetatable(r, APInt_metatable)
+end
+
+-- a + b, where b_negative gives the sign to use for b (subtraction passes the flipped sign).
+local function add_with_sign(a, na, b, nb, b_negative)
+	local a_negative = a[na] < 0
+	local a_digits, b_digits = magnitude(a, na), magnitude(b, nb)
+	if a_negative == b_negative then
+		local r, nr = add_magnitudes(a_digits, na, b_digits, nb)
+		return from_magnitude(r, nr, a_negative)
+	end
+
+	local order = compare_magnitudes(a_digits, na, b_digits, nb)
+	if order == 0 then
+		return ZERO
+	elseif order > 0 then
+		local r, nr = subtract_magnitudes(a_digits, na, b_digits, nb)
+		return from_magnitude(r, nr, a_negative)
+	end
+	local r, nr = subtract_magnitudes(b_digits, nb, a_digits, na)
+	return from_magnitude(r, nr, b_negative)
+end
+
+local function add(a, b)
+	local na, nb = #a, #b
+	if na == 1 and nb == 1 then
+		return from_small_integer(a[1] + b[1])
+	end
+	return add_with_sign(a, na, b, nb, b[nb] < 0)
+end
+
+local function subtract(a, b)
+	local na, nb = #a, #b
+	if na == 1 and nb == 1 then
+		return from_small_integer(a[1] - b[1])
+	end
+	return add_with_sign(a, na, b, nb, b[nb] > 0)
+end
+
+local function multiply(a, b)
+	local na, nb = #a, #b
+	if na == 1 and nb == 1 then
+		local product = a[1] * b[1]
+		if -SAFE_LIMIT < product and product < SAFE_LIMIT then
+			return from_small_integer(product)
+		end
+	end
+
+	local negative = (a[na] < 0) ~= (b[nb] < 0)
+	local r, nr = multiply_magnitudes(magnitude(a, na), na, magnitude(b, nb), nb)
+	return from_magnitude(r, nr, negative)
+end
+
+-- Floor division, like Python and Lua's own // and %: returns q and r with
+-- a == q * b + r, where q is rounded down and r has the sign of b.
+local function divide_with_remainder(a, b)
+	local na, nb = #a, #b
+	local b_top = b[nb]
+	if nb == 1 then
+		if b_top == 0 then
+			error("Division by zero")
+		end
+		if na == 1 then
+			-- with both values below 2^52 the float quotient rounds to the exact floor
+			local x = a[1]
+			local q = math_floor(x / b_top)
+			return from_digit(q), from_digit(x - q * b_top)
+		end
+	end
+
+	local a_negative, b_negative = a[na] < 0, b_top < 0
+	local b_digits = magnitude(b, nb)
+	local q, nq, r, nr = divide_magnitudes(magnitude(a, na), na, b_digits, nb)
+	if a_negative ~= b_negative and not is_zero(r, nr) then
+		q, nq = add_magnitudes(q, nq, ONE_DIGITS, 1)
+		r, nr = subtract_magnitudes(b_digits, nb, r, nr)
+	end
+	return from_magnitude(q, nq, a_negative ~= b_negative), from_magnitude(r, nr, b_negative)
+end
+
+local function divide(a, b)
+	return (divide_with_remainder(a, b))
+end
+
+local function modulo(a, b)
+	local _, r = divide_with_remainder(a, b)
+	return r
+end
+
+-- base ^ exponent for 0 <= exponent < BASE, by binary exponentiation from the top bit down.
+local function power_by_digit(base, exponent)
+	if exponent == 0 then
+		return SMALL_INTEGERS[1]
+	end
+	local bit = 1
+	while bit * 2 <= exponent do
+		bit = bit * 2
+	end
+	local remaining = exponent - bit
+	local result = base
+	while bit > 1 do
+		bit = bit / 2
+		result = multiply(result, result)
+		if remaining >= bit then
+			remaining = remaining - bit
+			result = multiply(result, base)
+		end
+	end
 	return result
 end
 
-local function __eq(a, b)
-	if type(a) ~= type(b) then
+-- base ^ exponent. Negative exponents round down like 1 / base^|exponent| would.
+local function power(base, exponent)
+	local n = #exponent
+	local exponent_negative = exponent[n] < 0
+	local odd = exponent[1] % 2 == 1
+
+	if #base == 1 then
+		local x = base[1]
+		if x == 0 then
+			if exponent_negative then
+				error("Negative power of zero")
+			end
+			return is_zero(exponent, n) and SMALL_INTEGERS[1] or ZERO
+		elseif x == 1 or (x == -1 and not odd) then
+			return SMALL_INTEGERS[1]
+		elseif x == -1 then
+			return base
+		end
+	end
+
+	if exponent_negative then
+		return (base[#base] < 0 and odd) and SMALL_INTEGERS[-1] or ZERO
+	end
+	if n > 1 then
+		error("Exponent is too large")
+	end
+	return power_by_digit(base, exponent[1])
+end
+
+--------------------------------------------------------------------------------
+-- Comparison
+--------------------------------------------------------------------------------
+
+local function equal(a, b)
+	local n = #a
+	if n ~= #b then
 		return false
 	end
-	if __sign(a) ~= __sign(b) then
-		return false
-	end
-	if #a ~= #b then
-		return false
-	end
-	if #a == 1 then
-		return a[1] == b[1]
-	end
-	for i = 1, #a do
+	for i = 1, n do
 		if a[i] ~= b[i] then
 			return false
 		end
@@ -632,204 +678,208 @@ local function __eq(a, b)
 	return true
 end
 
-local function __lt(a, b)
-	local sign_a = __sign(a)
-	local sign_b = __sign(b)
-
-	if sign_a ~= sign_b then
-		return sign_a < sign_b
+-- Returns -1, 0 or 1 as a is smaller than, equal to or larger than b.
+local function compare(a, b)
+	local na, nb = #a, #b
+	local a_top, b_top = a[na], b[nb]
+	local a_negative = a_top < 0
+	if a_negative ~= (b_top < 0) then
+		return a_negative and -1 or 1
 	end
-
-	if sign_a == 1 then
-		return mag_lt_abs(a, b)
-	else
-		return mag_lt_abs(b, a)
+	-- both have the same sign; for negative numbers the larger magnitude is the smaller number
+	local larger = a_negative and -1 or 1
+	if na ~= nb then
+		return na < nb and -larger or larger
 	end
+	if a_top ~= b_top then
+		return a_top < b_top and -1 or 1 -- the signed top digits already compare correctly
+	end
+	for i = na - 1, 1, -1 do
+		local x, y = a[i], b[i]
+		if x ~= y then
+			return x < y and -larger or larger
+		end
+	end
+	return 0
 end
 
-local function __tostring(x)
-	if #x == 1 then
-		local val = x[1]
-		if val == 0 then
-			return "0"
-		end
-		if val < 0 then
-			return "-" .. string_format("%.f", -val)
-		end
-		return string_format("%.f", val)
-	end
-
-	if not TOSTRING_DIVISOR then
-		TOSTRING_DIVISOR = APInt.new(10 ^ TOSTRING_DIVISOR_DIGITS)
-	end
-
-	if __eq(x, PRELOADED[0]) then
-		return "0"
-	end
-
-	local work_val = __abs(x)
-	local sign = (__sign(x) == -1) and "-" or ""
-	local parts = {}
-
-	while work_val > PRELOADED[0] do
-		local quotient, remainder = __div(work_val, TOSTRING_DIVISOR)
-		local remainder_val = (remainder[1] or 0)
-		table_insert(parts, 1, remainder_val)
-		work_val = quotient
-	end
-
-	local first = parts[1]
-	local str = sign .. first
-	for i = 2, #parts do
-		str = str .. string_format(PADDING_FORMAT, parts[i])
-	end
-
-	return str
+local function less_than(a, b)
+	return compare(a, b) < 0
 end
+
+local function less_or_equal(a, b)
+	return compare(a, b) <= 0
+end
+
+--------------------------------------------------------------------------------
+-- Conversion
+--------------------------------------------------------------------------------
+
+local function to_string(x)
+	local n = #x
+	local top = x[n]
+	if n == 1 then
+		return string_format("%.0f", top)
+	end
+
+	-- repeatedly divide a scratch copy by 10^8, collecting 8 decimal digits at a time
+	local work = copy_magnitude(x, n)
+	local chunks = {}
+	local count = 0
+	repeat
+		count = count + 1
+		chunks[count] = divide_small_in_place(work, n, CHUNK)
+		while n > 1 and work[n] == 0 do
+			n = n - 1
+		end
+	until n == 1 and work[1] == 0
+
+	local parts = { (top < 0 and "-" or "") .. string_format("%.0f", chunks[count]) }
+	for i = count - 1, 1, -1 do
+		parts[count - i + 1] = string_format("%08.0f", chunks[i])
+	end
+	return table_concat(parts)
+end
+
+local function from_string(s)
+	local sign, digits = string_match(s, "^(%-?)(%d+)$")
+	assert(digits, "Invalid number string format")
+	local negative = sign == "-"
+	local length = #digits
+	if length <= MAX_SINGLE_DIGIT_LENGTH then
+		local value = tonumber(digits)
+		return from_digit(negative and -value or value)
+	end
+
+	-- Horner's method in chunks of 8 decimal digits, on a private array
+	local first = (length - 1) % CHUNK_DIGITS + 1
+	local work = { tonumber(string_sub(digits, 1, first)) }
+	local n = 1
+	for position = first + 1, length, CHUNK_DIGITS do
+		local chunk = tonumber(string_sub(digits, position, position + CHUNK_DIGITS - 1))
+		n = multiply_add_small_in_place(work, n, CHUNK, chunk)
+	end
+	return from_magnitude(work, n, negative)
+end
+
+local function from_number(x)
+	assert(x % 1 == 0, "The number passed must be a whole number")
+	assert(-SAFE_LIMIT < x and x < SAFE_LIMIT, "Number is too large to be exact, pass it as a string instead")
+	return from_small_integer(x)
+end
+
+-- Builds an APInt from a digit table in the internal format (copying it).
+local function from_digit_table(t)
+	local n = #t
+	assert(n > 0, "Digit table must not be empty")
+	for i = 1, n do
+		local digit = t[i]
+		assert(type(digit) == "number" and digit % 1 == 0, "Digits must be whole numbers")
+		if i < n then
+			assert(0 <= digit and digit < BASE, "Elements of digits table are out of range")
+		else
+			assert(-BASE < digit and digit < BASE, "Last element of digits table is out of range")
+		end
+	end
+	local r = copy_magnitude(t, n)
+	return from_magnitude(r, trim(r, n), t[n] < 0)
+end
+
+--------------------------------------------------------------------------------
+-- Public interface
+--------------------------------------------------------------------------------
 
 function APInt.new(x, sign)
-	if is_big_int(x) then
-		if sign and __sign(x) ~= sign then
-			return -x
-		end
-		return x
-	end
-
-	if type(x) == "string" then
+	assert(sign == nil or sign == 1 or sign == -1, "Sign must be 1 or -1")
+	local result
+	if is_apint(x) then
+		result = x
+	elseif type(x) == "number" then
+		result = from_number(x)
+	elseif type(x) == "string" then
 		assert(sign == nil, "Cannot provide a sign argument when creating from a string")
-		return APInt.from_string(x)
+		result = from_string(x)
+	elseif type(x) == "table" then
+		result = from_digit_table(x)
+	else
+		error("Argument of new must be an integer, string, or a APInt table representation", 2)
 	end
 
-	if type(x) == "number" then
-		if PRELOADED[x] then
-			return PRELOADED[x]
-		end
-		assert(x % 1 == 0, "The number passed must be a whole number")
-		assert((-BASE < x) and (x < BASE), "Number is out of single-digit range")
-		local digits = { x }
-		if sign then
-			digits[#digits] = math_abs(digits[#digits]) * sign
-		end
-		return setmetatable(digits, APInt_metatable)
+	if sign and (result[#result] < 0) ~= (sign < 0) then
+		return negate(result)
 	end
-
-	assert(type(x) == "number" or type(x) == "table", "Argument of new must be an integer, string, or a APInt table representation")
-
-	local digits
-	if type(x) == "table" then
-		local last = x[#x]
-		if last then
-			assert(type(last) == "number" and -BASE < last and last < BASE, "Last element of digits table is out of range")
-		end
-		for i = 1, #x - 1 do
-			local v = x[i]
-			assert(type(v) == "number" and 0 <= v and v < BASE, "Elements of digits table are out of range")
-		end
-		digits = __remove_trailing_zeros(x)
-	end
-
-	if sign and digits[#digits] then
-		digits[#digits] = math_abs(digits[#digits]) * sign
-	end
-
-	return setmetatable(digits, APInt_metatable)
+	return result
 end
 
 function APInt.from_string(s)
 	assert(type(s) == "string", "Argument to from_string must be a string")
-
-	local sign = 1
-	if string_sub(s, 1, 1) == "-" then
-		sign = -1
-		s = string_sub(s, 2)
-	end
-
-	assert(string_match(s, "^[0-9]+$"), "Invalid number string format")
-
-	if not TOSTRING_DIVISOR then
-		TOSTRING_DIVISOR = APInt.new(10 ^ TOSTRING_DIVISOR_DIGITS)
-	end
-
-	local result = PRELOADED[0]
-	local len = #s
-	local first_chunk_len = len % TOSTRING_DIVISOR_DIGITS
-	if first_chunk_len == 0 and len > 0 then
-		first_chunk_len = TOSTRING_DIVISOR_DIGITS
-	end
-
-	local current_pos = 1
-	if first_chunk_len > 0 then
-		local first_chunk_str = string_sub(s, 1, first_chunk_len)
-		result = APInt.new(tonumber(first_chunk_str))
-		current_pos = first_chunk_len + 1
-	end
-
-	while current_pos <= len do
-		local chunk_str = string_sub(s, current_pos, current_pos + TOSTRING_DIVISOR_DIGITS - 1)
-		result = result * TOSTRING_DIVISOR + APInt.new(tonumber(chunk_str))
-		current_pos = current_pos + TOSTRING_DIVISOR_DIGITS
-	end
-
-	return sign == -1 and -result or result
+	return from_string(s)
 end
 
+-- Formats a number or digit table as "[d1, d2, ...]", showing the internal digits.
 function APInt.format(x)
-	local is_number = type(x) == "number"
-	if is_number then
-		return string_format("%.f", x)
+	if type(x) == "number" then
+		return string_format("%.0f", x)
 	end
-
-	if type(x) == "table" and not is_big_int(x) then
-		for _, v in pairs(x) do
-			assert(type(v) == "number", "Trying to format an invalid table")
-		end
+	assert(type(x) == "table", "Invalid argument passed to format")
+	local parts = {}
+	for i = 1, #x do
+		assert(type(x[i]) == "number", "Trying to format an invalid table")
+		parts[i] = string_format("%.0f", x[i])
 	end
-
-	assert(type(x) == "number" or type(x) == "table", "Invalid argument passed to format")
-
-	local digits = {}
-	for i, v in ipairs(x) do
-		digits[i] = string_format("%.f", v)
-	end
-
-	return string.format("[%s]", table_concat(digits, ", "))
+	return "[" .. table_concat(parts, ", ") .. "]"
 end
 
 function APInt.table_print(x)
 	print(APInt.format(x))
 end
 
-local function convert_arg(v)
-	if is_big_int(v) then
-		return v
-	end
+APInt.__is_big_int = is_apint
+
+-- Converts an operand that is not an APInt, according to APInt.MODE.
+local function coerce(value)
 	if APInt.MODE == "STRICT" then
 		error("Argument for operation was not APInt")
-	else
-		if APInt.MODE == "WARNING" then
-			warn("Argument for operation was not a APInt, converted")
+	elseif APInt.MODE == "WARNING" then
+		warn_user("Argument for operation was not a APInt, converted")
+	end
+	return APInt.new(value)
+end
+
+-- Wraps a two-operand function so it accepts anything APInt.new does.
+local function binary_operator(operation)
+	return function(a, b)
+		if getmetatable(a) ~= APInt_metatable then
+			a = coerce(a)
 		end
-		return APInt.new(v)
+		if getmetatable(b) ~= APInt_metatable then
+			b = coerce(b)
+		end
+		return operation(a, b)
 	end
 end
 
 APInt_metatable.__index = APInt
-APInt_metatable.__add = function(a, b) return __add(convert_arg(a), convert_arg(b)) end
-APInt_metatable.__sub = function(a, b) return __sub(convert_arg(a), convert_arg(b)) end
-APInt_metatable.__mul = function(a, b) return __mul(convert_arg(a), convert_arg(b)) end
-APInt_metatable.__div = function(a, b) return __div(convert_arg(a), convert_arg(b)) end
-APInt_metatable.__mod = function(a, b) return __mod(convert_arg(a), convert_arg(b)) end
-APInt_metatable.__pow = function(a, b) return __pow(convert_arg(a), convert_arg(b)) end
-APInt_metatable.__tostring = __tostring
-APInt_metatable.__unm = __unm
-APInt_metatable.__lt = __lt
-APInt_metatable.__eq = __eq
+APInt_metatable.__add = binary_operator(add)
+APInt_metatable.__sub = binary_operator(subtract)
+APInt_metatable.__mul = binary_operator(multiply)
+APInt_metatable.__div = binary_operator(divide)
+APInt_metatable.__idiv = APInt_metatable.__div -- Luau's // operator
+APInt_metatable.__mod = binary_operator(modulo)
+APInt_metatable.__pow = binary_operator(power)
+APInt_metatable.__lt = binary_operator(less_than)
+APInt_metatable.__le = binary_operator(less_or_equal)
+APInt_metatable.__unm = negate
+APInt_metatable.__tostring = to_string
+APInt_metatable.__eq = function(a, b)
+	-- Luau also calls __eq when only one side is an APInt
+	return is_apint(a) and is_apint(b) and equal(a, b)
+end
 
-local call_proxy = {
+setmetatable(APInt, {
 	__call = function(_, x, sign)
 		return APInt.new(x, sign)
-	end
-}
-setmetatable(APInt, call_proxy)
+	end,
+})
 
 return APInt

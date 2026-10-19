@@ -1,0 +1,173 @@
+runtime,library,operation,workload,digits,ops_per_second
+Luau (native),APInt,add,N digits + N digits,5,9806934.547
+Luau (native),BigNum,add,N digits + N digits,5,5175277.552
+Luau (native),APInt,add,N digits + N digits,10,9692343.81
+Luau (native),BigNum,add,N digits + N digits,10,3617304.866
+Luau (native),APInt,add,N digits + N digits,20,4444906.646
+Luau (native),BigNum,add,N digits + N digits,20,3344861.277
+Luau (native),APInt,add,N digits + N digits,50,3258406.493
+Luau (native),BigNum,add,N digits + N digits,50,1549723.224
+Luau (native),APInt,add,N digits + N digits,100,2459983.419
+Luau (native),BigNum,add,N digits + N digits,100,1286089.465
+Luau (native),APInt,add,N digits + N digits,200,1717143.738
+Luau (native),BigNum,add,N digits + N digits,200,757846.355
+Luau (native),APInt,add,N digits + N digits,500,990019.345
+Luau (native),BigNum,add,N digits + N digits,500,261451.316
+Luau (native),APInt,add,N digits + N digits,1000,556382.271
+Luau (native),BigNum,add,N digits + N digits,1000,137659.506
+Luau (native),APInt,sub,N digits - N digits,5,9198264.027
+Luau (native),BigNum,sub,N digits - N digits,5,3039771.689
+Luau (native),APInt,sub,N digits - N digits,10,9237461.145
+Luau (native),BigNum,sub,N digits - N digits,10,2214256.533
+Luau (native),APInt,sub,N digits - N digits,20,3625770.693
+Luau (native),BigNum,sub,N digits - N digits,20,1989316.179
+Luau (native),APInt,sub,N digits - N digits,50,2854711.377
+Luau (native),BigNum,sub,N digits - N digits,50,987499.392
+Luau (native),APInt,sub,N digits - N digits,100,2182904.26
+Luau (native),BigNum,sub,N digits - N digits,100,833943.442
+Luau (native),APInt,sub,N digits - N digits,200,1613633.945
+Luau (native),BigNum,sub,N digits - N digits,200,512816.148
+Luau (native),APInt,sub,N digits - N digits,500,938573.938
+Luau (native),BigNum,sub,N digits - N digits,500,197578.783
+Luau (native),APInt,sub,N digits - N digits,1000,533072.529
+Luau (native),BigNum,sub,N digits - N digits,1000,103945.066
+Luau (native),APInt,mul,N digits * N digits,5,9354162.875
+Luau (native),BigNum,mul,N digits * N digits,5,2968605.424
+Luau (native),APInt,mul,N digits * N digits,10,3838826.943
+Luau (native),BigNum,mul,N digits * N digits,10,2354171.272
+Luau (native),APInt,mul,N digits * N digits,20,2501722.217
+Luau (native),BigNum,mul,N digits * N digits,20,1192746.09
+Luau (native),APInt,mul,N digits * N digits,50,1295744.1
+Luau (native),BigNum,mul,N digits * N digits,50,352391.375
+Luau (native),APInt,mul,N digits * N digits,100,598883.878
+Luau (native),BigNum,mul,N digits * N digits,100,102363.627
+Luau (native),APInt,mul,N digits * N digits,200,186492.299
+Luau (native),BigNum,mul,N digits * N digits,200,28634.021
+Luau (native),APInt,mul,N digits * N digits,500,40092.485
+Luau (native),BigNum,mul,N digits * N digits,500,4648.935
+Luau (native),APInt,mul,N digits * N digits,1000,9882.336
+Luau (native),BigNum,mul,N digits * N digits,1000,1197.17
+Luau (native),APInt,div,2N digits / N digits,5,7416122.069
+Luau (native),BigNum,div,2N digits / N digits,5,850620.926
+Luau (native),APInt,div,2N digits / N digits,10,1567524.943
+Luau (native),BigNum,div,2N digits / N digits,10,135942.964
+Luau (native),APInt,div,2N digits / N digits,20,1350890.983
+Luau (native),BigNum,div,2N digits / N digits,20,75098.244
+Luau (native),APInt,div,2N digits / N digits,50,738268.479
+Luau (native),BigNum,div,2N digits / N digits,50,20395.329
+Luau (native),APInt,div,2N digits / N digits,100,373192.491
+Luau (native),BigNum,div,2N digits / N digits,100,3900.828
+Luau (native),APInt,div,2N digits / N digits,200,152961.438
+Luau (native),BigNum,div,2N digits / N digits,200,505.293
+Luau (native),APInt,div,2N digits / N digits,500,29303.825
+Luau (native),BigNum,div,2N digits / N digits,500,14.226
+Luau (native),APInt,div,2N digits / N digits,1000,7749.167
+Luau (native),BigNum,div,2N digits / N digits,1000,3.331
+Luau (native),APInt,mod,2N digits % N digits,5,7459978.702
+Luau (native),BigNum,mod,2N digits % N digits,5,838205.684
+Luau (native),APInt,mod,2N digits % N digits,10,1589723.92
+Luau (native),BigNum,mod,2N digits % N digits,10,133761.999
+Luau (native),APInt,mod,2N digits % N digits,20,1365148.203
+Luau (native),BigNum,mod,2N digits % N digits,20,74557.949
+Luau (native),APInt,mod,2N digits % N digits,50,750717.003
+Luau (native),BigNum,mod,2N digits % N digits,50,19102.628
+Luau (native),APInt,mod,2N digits % N digits,100,372747.483
+Luau (native),BigNum,mod,2N digits % N digits,100,3705.123
+Luau (native),APInt,mod,2N digits % N digits,200,147953.209
+Luau (native),BigNum,mod,2N digits % N digits,200,512.976
+Luau (native),APInt,mod,2N digits % N digits,500,28929.372
+Luau (native),BigNum,mod,2N digits % N digits,500,4.945
+Luau (native),APInt,mod,2N digits % N digits,1000,7602.044
+Luau (native),APInt,pow,"3 digit base ^ exponent, N digit result",5,9511541.746
+Luau (native),BigNum,pow,"3 digit base ^ exponent, N digit result",5,851660.191
+Luau (native),APInt,pow,"3 digit base ^ exponent, N digit result",10,4342205.838
+Luau (native),BigNum,pow,"3 digit base ^ exponent, N digit result",10,329930.921
+Luau (native),APInt,pow,"3 digit base ^ exponent, N digit result",20,1436206.189
+Luau (native),BigNum,pow,"3 digit base ^ exponent, N digit result",20,139313.56
+Luau (native),APInt,pow,"3 digit base ^ exponent, N digit result",50,821077.85
+Luau (native),BigNum,pow,"3 digit base ^ exponent, N digit result",50,56162.374
+Luau (native),APInt,pow,"3 digit base ^ exponent, N digit result",100,481400.098
+Luau (native),BigNum,pow,"3 digit base ^ exponent, N digit result",100,32909.628
+Luau (native),APInt,pow,"3 digit base ^ exponent, N digit result",200,240182.969
+Luau (native),BigNum,pow,"3 digit base ^ exponent, N digit result",200,14036.843
+Luau (native),APInt,pow,"3 digit base ^ exponent, N digit result",500,63927.352
+Luau (native),BigNum,pow,"3 digit base ^ exponent, N digit result",500,3189.423
+Luau (native),APInt,pow,"3 digit base ^ exponent, N digit result",1000,24412.839
+Luau (native),BigNum,pow,"3 digit base ^ exponent, N digit result",1000,1251.696
+Luau (native),APInt,eq,N digits == N digits (equal values),5,15319558.281
+Luau (native),BigNum,eq,N digits == N digits (equal values),5,11245102.544
+Luau (native),APInt,eq,N digits == N digits (equal values),10,15409932.489
+Luau (native),BigNum,eq,N digits == N digits (equal values),10,9762288.65
+Luau (native),APInt,eq,N digits == N digits (equal values),20,12868220.01
+Luau (native),BigNum,eq,N digits == N digits (equal values),20,8780008.394
+Luau (native),APInt,eq,N digits == N digits (equal values),50,9781461.621
+Luau (native),BigNum,eq,N digits == N digits (equal values),50,5263057.416
+Luau (native),APInt,eq,N digits == N digits (equal values),100,7182404.166
+Luau (native),BigNum,eq,N digits == N digits (equal values),100,3856643.893
+Luau (native),APInt,eq,N digits == N digits (equal values),200,4490500.431
+Luau (native),BigNum,eq,N digits == N digits (equal values),200,2325065.771
+Luau (native),APInt,eq,N digits == N digits (equal values),500,2219652.752
+Luau (native),BigNum,eq,N digits == N digits (equal values),500,1067028.931
+Luau (native),APInt,eq,N digits == N digits (equal values),1000,1202372.365
+Luau (native),BigNum,eq,N digits == N digits (equal values),1000,561666.903
+Luau (native),APInt,lt,N digits < N digits,5,11107994.554
+Luau (native),BigNum,lt,N digits < N digits,5,10617333.976
+Luau (native),APInt,lt,N digits < N digits,10,10638241.121
+Luau (native),BigNum,lt,N digits < N digits,10,9784919.818
+Luau (native),APInt,lt,N digits < N digits,20,11078730.157
+Luau (native),BigNum,lt,N digits < N digits,20,10459371.95
+Luau (native),APInt,lt,N digits < N digits,50,10890866.809
+Luau (native),BigNum,lt,N digits < N digits,50,9049076.216
+Luau (native),APInt,lt,N digits < N digits,100,10856536.833
+Luau (native),BigNum,lt,N digits < N digits,100,10104335.807
+Luau (native),APInt,lt,N digits < N digits,200,11064587.633
+Luau (native),BigNum,lt,N digits < N digits,200,10383716.836
+Luau (native),APInt,lt,N digits < N digits,500,10678027.506
+Luau (native),BigNum,lt,N digits < N digits,500,9767667.078
+Luau (native),APInt,lt,N digits < N digits,1000,11001789.298
+Luau (native),BigNum,lt,N digits < N digits,1000,10265298.755
+Luau (native),APInt,unm,-(N digits),5,14555531.92
+Luau (native),BigNum,unm,-(N digits),5,6213446.742
+Luau (native),APInt,unm,-(N digits),10,14634094.331
+Luau (native),BigNum,unm,-(N digits),10,4803527.987
+Luau (native),APInt,unm,-(N digits),20,7387707.975
+Luau (native),BigNum,unm,-(N digits),20,4614844.251
+Luau (native),APInt,unm,-(N digits),50,5314895.191
+Luau (native),BigNum,unm,-(N digits),50,2823696.575
+Luau (native),APInt,unm,-(N digits),100,3932200.569
+Luau (native),BigNum,unm,-(N digits),100,2389066.59
+Luau (native),APInt,unm,-(N digits),200,2836179.158
+Luau (native),BigNum,unm,-(N digits),200,1614484.749
+Luau (native),APInt,unm,-(N digits),500,1737696.156
+Luau (native),BigNum,unm,-(N digits),500,798378.969
+Luau (native),APInt,unm,-(N digits),1000,1095328.858
+Luau (native),BigNum,unm,-(N digits),1000,471763.169
+Luau (native),APInt,tostring,N digits to string,5,3975311.162
+Luau (native),BigNum,tostring,N digits to string,5,238074.492
+Luau (native),APInt,tostring,N digits to string,10,3277678.516
+Luau (native),BigNum,tostring,N digits to string,10,84097.726
+Luau (native),APInt,tostring,N digits to string,20,838913.987
+Luau (native),BigNum,tostring,N digits to string,20,37430.381
+Luau (native),APInt,tostring,N digits to string,50,403617.3
+Luau (native),BigNum,tostring,N digits to string,50,6792.626
+Luau (native),APInt,tostring,N digits to string,100,218949.034
+Luau (native),BigNum,tostring,N digits to string,100,2293.735
+Luau (native),APInt,tostring,N digits to string,200,103883.041
+Luau (native),BigNum,tostring,N digits to string,200,489.048
+Luau (native),APInt,tostring,N digits to string,500,27449.95
+Luau (native),BigNum,tostring,N digits to string,500,44.312
+Luau (native),APInt,tostring,N digits to string,1000,8281.179
+Luau (native),BigNum,tostring,N digits to string,1000,6.554
+Luau (native),APInt,new,string of N digits to number,5,4581315.83
+Luau (native),BigNum,new,string of N digits to number,5,544914.11
+Luau (native),APInt,new,string of N digits to number,10,4111856.711
+Luau (native),BigNum,new,string of N digits to number,10,12691.974
+Luau (native),APInt,new,string of N digits to number,20,1766571.59
+Luau (native),BigNum,new,string of N digits to number,20,832.768
+Luau (native),APInt,new,string of N digits to number,50,795261.381
+Luau (native),BigNum,new,string of N digits to number,50,31.232
+Luau (native),APInt,new,string of N digits to number,100,383015.48
+Luau (native),BigNum,new,string of N digits to number,100,2.393
+Luau (native),APInt,new,string of N digits to number,200,148793.479
+Luau (native),APInt,new,string of N digits to number,500,34737.077
+Luau (native),APInt,new,string of N digits to number,1000,10412.005

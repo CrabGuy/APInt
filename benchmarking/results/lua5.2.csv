@@ -1,0 +1,172 @@
+runtime,library,operation,workload,digits,ops_per_second
+Lua 5.2,APInt,add,N digits + N digits,5,3483327.948
+Lua 5.2,BigNum,add,N digits + N digits,5,1961438.126
+Lua 5.2,APInt,add,N digits + N digits,10,3003318.667
+Lua 5.2,BigNum,add,N digits + N digits,10,1434186.837
+Lua 5.2,APInt,add,N digits + N digits,20,1449114.786
+Lua 5.2,BigNum,add,N digits + N digits,20,1375159.75
+Lua 5.2,APInt,add,N digits + N digits,50,1307881.817
+Lua 5.2,BigNum,add,N digits + N digits,50,858524.768
+Lua 5.2,APInt,add,N digits + N digits,100,1140818.859
+Lua 5.2,BigNum,add,N digits + N digits,100,710193.478
+Lua 5.2,APInt,add,N digits + N digits,200,857746.215
+Lua 5.2,BigNum,add,N digits + N digits,200,457222.768
+Lua 5.2,APInt,add,N digits + N digits,500,506173.875
+Lua 5.2,BigNum,add,N digits + N digits,500,175373.985
+Lua 5.2,APInt,add,N digits + N digits,1000,294139.275
+Lua 5.2,BigNum,add,N digits + N digits,1000,85517.834
+Lua 5.2,APInt,sub,N digits - N digits,5,3368450.996
+Lua 5.2,BigNum,sub,N digits - N digits,5,1364655.879
+Lua 5.2,APInt,sub,N digits - N digits,10,3531135.79
+Lua 5.2,BigNum,sub,N digits - N digits,10,1108401.636
+Lua 5.2,APInt,sub,N digits - N digits,20,1640412.262
+Lua 5.2,BigNum,sub,N digits - N digits,20,1053354.579
+Lua 5.2,APInt,sub,N digits - N digits,50,1321387.42
+Lua 5.2,BigNum,sub,N digits - N digits,50,570203.976
+Lua 5.2,APInt,sub,N digits - N digits,100,1056474.44
+Lua 5.2,BigNum,sub,N digits - N digits,100,481585.456
+Lua 5.2,APInt,sub,N digits - N digits,200,826538.102
+Lua 5.2,BigNum,sub,N digits - N digits,200,307064.007
+Lua 5.2,APInt,sub,N digits - N digits,500,494389.163
+Lua 5.2,BigNum,sub,N digits - N digits,500,126911.905
+Lua 5.2,APInt,sub,N digits - N digits,1000,301095.989
+Lua 5.2,BigNum,sub,N digits - N digits,1000,71973.188
+Lua 5.2,APInt,mul,N digits * N digits,5,3362474.781
+Lua 5.2,BigNum,mul,N digits * N digits,5,1380177.021
+Lua 5.2,APInt,mul,N digits * N digits,10,1479121.84
+Lua 5.2,BigNum,mul,N digits * N digits,10,972508.189
+Lua 5.2,APInt,mul,N digits * N digits,20,923237.387
+Lua 5.2,BigNum,mul,N digits * N digits,20,503152.67
+Lua 5.2,APInt,mul,N digits * N digits,50,405359.35
+Lua 5.2,BigNum,mul,N digits * N digits,50,132470.524
+Lua 5.2,APInt,mul,N digits * N digits,100,165084.627
+Lua 5.2,BigNum,mul,N digits * N digits,100,37812.536
+Lua 5.2,APInt,mul,N digits * N digits,200,53374.378
+Lua 5.2,BigNum,mul,N digits * N digits,200,9939.586
+Lua 5.2,APInt,mul,N digits * N digits,500,10470.59
+Lua 5.2,BigNum,mul,N digits * N digits,500,1659.161
+Lua 5.2,APInt,mul,N digits * N digits,1000,3217.762
+Lua 5.2,BigNum,mul,N digits * N digits,1000,422.964
+Lua 5.2,APInt,div,2N digits / N digits,5,2414292.612
+Lua 5.2,BigNum,div,2N digits / N digits,5,449529.833
+Lua 5.2,APInt,div,2N digits / N digits,10,601135.07
+Lua 5.2,BigNum,div,2N digits / N digits,10,70162.146
+Lua 5.2,APInt,div,2N digits / N digits,20,503532.8
+Lua 5.2,BigNum,div,2N digits / N digits,20,45259.847
+Lua 5.2,APInt,div,2N digits / N digits,50,264134.497
+Lua 5.2,BigNum,div,2N digits / N digits,50,9081.401
+Lua 5.2,APInt,div,2N digits / N digits,100,123193.37
+Lua 5.2,BigNum,div,2N digits / N digits,100,1717.888
+Lua 5.2,APInt,div,2N digits / N digits,200,44626.931
+Lua 5.2,BigNum,div,2N digits / N digits,200,206.345
+Lua 5.2,APInt,div,2N digits / N digits,500,8387.01
+Lua 5.2,BigNum,div,2N digits / N digits,500,6.588
+Lua 5.2,APInt,div,2N digits / N digits,1000,2358.352
+Lua 5.2,APInt,mod,2N digits % N digits,5,2346123.617
+Lua 5.2,BigNum,mod,2N digits % N digits,5,435132.742
+Lua 5.2,APInt,mod,2N digits % N digits,10,585102.29
+Lua 5.2,BigNum,mod,2N digits % N digits,10,66344.588
+Lua 5.2,APInt,mod,2N digits % N digits,20,494970.725
+Lua 5.2,BigNum,mod,2N digits % N digits,20,40429.29
+Lua 5.2,APInt,mod,2N digits % N digits,50,250375.563
+Lua 5.2,BigNum,mod,2N digits % N digits,50,9254.905
+Lua 5.2,APInt,mod,2N digits % N digits,100,117555.878
+Lua 5.2,BigNum,mod,2N digits % N digits,100,1673.528
+Lua 5.2,APInt,mod,2N digits % N digits,200,44336.682
+Lua 5.2,BigNum,mod,2N digits % N digits,200,216.233
+Lua 5.2,APInt,mod,2N digits % N digits,500,8481.354
+Lua 5.2,BigNum,mod,2N digits % N digits,500,4.337
+Lua 5.2,APInt,mod,2N digits % N digits,1000,2258.815
+Lua 5.2,APInt,pow,"3 digit base ^ exponent, N digit result",5,4464920.205
+Lua 5.2,BigNum,pow,"3 digit base ^ exponent, N digit result",5,571219.334
+Lua 5.2,APInt,pow,"3 digit base ^ exponent, N digit result",10,1547833.966
+Lua 5.2,BigNum,pow,"3 digit base ^ exponent, N digit result",10,191343.615
+Lua 5.2,APInt,pow,"3 digit base ^ exponent, N digit result",20,623170.429
+Lua 5.2,BigNum,pow,"3 digit base ^ exponent, N digit result",20,81852.803
+Lua 5.2,APInt,pow,"3 digit base ^ exponent, N digit result",50,291885.581
+Lua 5.2,BigNum,pow,"3 digit base ^ exponent, N digit result",50,30779.648
+Lua 5.2,APInt,pow,"3 digit base ^ exponent, N digit result",100,157059.202
+Lua 5.2,BigNum,pow,"3 digit base ^ exponent, N digit result",100,16004.304
+Lua 5.2,APInt,pow,"3 digit base ^ exponent, N digit result",200,80224.689
+Lua 5.2,BigNum,pow,"3 digit base ^ exponent, N digit result",200,7020.528
+Lua 5.2,APInt,pow,"3 digit base ^ exponent, N digit result",500,24894.51
+Lua 5.2,BigNum,pow,"3 digit base ^ exponent, N digit result",500,1698.06
+Lua 5.2,APInt,pow,"3 digit base ^ exponent, N digit result",1000,7311.521
+Lua 5.2,BigNum,pow,"3 digit base ^ exponent, N digit result",1000,482.09
+Lua 5.2,APInt,eq,N digits == N digits (equal values),5,5122780.72
+Lua 5.2,BigNum,eq,N digits == N digits (equal values),5,3686711.063
+Lua 5.2,APInt,eq,N digits == N digits (equal values),10,5291211.763
+Lua 5.2,BigNum,eq,N digits == N digits (equal values),10,3451309.288
+Lua 5.2,APInt,eq,N digits == N digits (equal values),20,4818753.545
+Lua 5.2,BigNum,eq,N digits == N digits (equal values),20,3345660.478
+Lua 5.2,APInt,eq,N digits == N digits (equal values),50,4029712.21
+Lua 5.2,BigNum,eq,N digits == N digits (equal values),50,2479359.334
+Lua 5.2,APInt,eq,N digits == N digits (equal values),100,3175006.35
+Lua 5.2,BigNum,eq,N digits == N digits (equal values),100,1987360.388
+Lua 5.2,APInt,eq,N digits == N digits (equal values),200,2416743.197
+Lua 5.2,BigNum,eq,N digits == N digits (equal values),200,1372933.443
+Lua 5.2,APInt,eq,N digits == N digits (equal values),500,1409368.569
+Lua 5.2,BigNum,eq,N digits == N digits (equal values),500,722873.068
+Lua 5.2,APInt,eq,N digits == N digits (equal values),1000,836108.895
+Lua 5.2,BigNum,eq,N digits == N digits (equal values),1000,405211.141
+Lua 5.2,APInt,lt,N digits < N digits,5,4981799.055
+Lua 5.2,BigNum,lt,N digits < N digits,5,3805653.593
+Lua 5.2,APInt,lt,N digits < N digits,10,5092040.803
+Lua 5.2,BigNum,lt,N digits < N digits,10,3724524.207
+Lua 5.2,APInt,lt,N digits < N digits,20,4921008.836
+Lua 5.2,BigNum,lt,N digits < N digits,20,3754185.845
+Lua 5.2,APInt,lt,N digits < N digits,50,4922159.595
+Lua 5.2,BigNum,lt,N digits < N digits,50,3422470.258
+Lua 5.2,APInt,lt,N digits < N digits,100,4807365.297
+Lua 5.2,BigNum,lt,N digits < N digits,100,3624164.644
+Lua 5.2,APInt,lt,N digits < N digits,200,4733972.23
+Lua 5.2,BigNum,lt,N digits < N digits,200,3536314.621
+Lua 5.2,APInt,lt,N digits < N digits,500,4875208.07
+Lua 5.2,BigNum,lt,N digits < N digits,500,3500412.104
+Lua 5.2,APInt,lt,N digits < N digits,1000,4956327.23
+Lua 5.2,BigNum,lt,N digits < N digits,1000,3573303.719
+Lua 5.2,APInt,unm,-(N digits),5,5893599.252
+Lua 5.2,BigNum,unm,-(N digits),5,2724758.518
+Lua 5.2,APInt,unm,-(N digits),10,5923579.36
+Lua 5.2,BigNum,unm,-(N digits),10,2260781.1
+Lua 5.2,APInt,unm,-(N digits),20,3996079.355
+Lua 5.2,BigNum,unm,-(N digits),20,2197657.297
+Lua 5.2,APInt,unm,-(N digits),50,3023980.163
+Lua 5.2,BigNum,unm,-(N digits),50,1450671.366
+Lua 5.2,APInt,unm,-(N digits),100,2231495.325
+Lua 5.2,BigNum,unm,-(N digits),100,1207775.363
+Lua 5.2,APInt,unm,-(N digits),200,1707067.258
+Lua 5.2,BigNum,unm,-(N digits),200,850767.51
+Lua 5.2,APInt,unm,-(N digits),500,1072351.03
+Lua 5.2,BigNum,unm,-(N digits),500,447704.378
+Lua 5.2,APInt,unm,-(N digits),1000,647696.793
+Lua 5.2,BigNum,unm,-(N digits),1000,264827.002
+Lua 5.2,APInt,tostring,N digits to string,5,3803534.217
+Lua 5.2,BigNum,tostring,N digits to string,5,121071.997
+Lua 5.2,APInt,tostring,N digits to string,10,3176367.823
+Lua 5.2,BigNum,tostring,N digits to string,10,45449.977
+Lua 5.2,APInt,tostring,N digits to string,20,502650.833
+Lua 5.2,BigNum,tostring,N digits to string,20,19350.969
+Lua 5.2,APInt,tostring,N digits to string,50,227244.322
+Lua 5.2,BigNum,tostring,N digits to string,50,3549.791
+Lua 5.2,APInt,tostring,N digits to string,100,110089.604
+Lua 5.2,BigNum,tostring,N digits to string,100,1046.616
+Lua 5.2,APInt,tostring,N digits to string,200,45957.333
+Lua 5.2,BigNum,tostring,N digits to string,200,209.212
+Lua 5.2,APInt,tostring,N digits to string,500,11374.533
+Lua 5.2,BigNum,tostring,N digits to string,500,18.053
+Lua 5.2,APInt,tostring,N digits to string,1000,3341.868
+Lua 5.2,BigNum,tostring,N digits to string,1000,2.635
+Lua 5.2,APInt,new,string of N digits to number,5,2133401.602
+Lua 5.2,BigNum,new,string of N digits to number,5,334308.399
+Lua 5.2,APInt,new,string of N digits to number,10,2016616.923
+Lua 5.2,BigNum,new,string of N digits to number,10,9097.458
+Lua 5.2,APInt,new,string of N digits to number,20,960429.055
+Lua 5.2,BigNum,new,string of N digits to number,20,497.438
+Lua 5.2,APInt,new,string of N digits to number,50,414402.523
+Lua 5.2,BigNum,new,string of N digits to number,50,15.207
+Lua 5.2,APInt,new,string of N digits to number,100,184546.109
+Lua 5.2,BigNum,new,string of N digits to number,100,1.071
+Lua 5.2,APInt,new,string of N digits to number,200,65123.352
+Lua 5.2,APInt,new,string of N digits to number,500,13185.044
+Lua 5.2,APInt,new,string of N digits to number,1000,3603.423
